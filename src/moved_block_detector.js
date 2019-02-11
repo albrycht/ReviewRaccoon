@@ -21,6 +21,18 @@ function hashCode(str){
     return hash;
 }
 
+const IndentationType = Object.freeze({
+    ADDED: Symbol("added"),
+    REMOVED: Symbol("removed")
+});
+
+class Indentation {
+    constructor(whitespace, indent_type) {
+        this.whitespace = whitespace;
+        this.indent_type = indent_type;
+    }
+}
+
 
 class Line {
     constructor(file, line_no, text) {
@@ -30,12 +42,35 @@ class Line {
             line_no = parseInt(line_no)
         }
         this.line_no = line_no;
-        this.text = text;
-        this.trim_hash = hashCode(text.trim())
+        this.trim_text = text.trim();
+        this.leading_whitespaces = text.substr(0, text.indexOf(this.trim_text.charAt(0)) - 1);
+        this.trim_hash = hashCode(this.trim_text)
     }
 
     is_line_before(line) {
         return (this.file === line.file) && (this.line_no + 1 === line.line_no)
+    }
+
+    calculate_indentation_change(destination_line) {
+        const length_diff = this.leading_whitespaces.length - destination_line.leading_whitespaces.length;
+        if ( length_diff > 0) {
+            return new Indentation(this.leading_whitespaces.substring(0, length_diff), IndentationType.REMOVED)
+        }
+        return new Indentation(destination_line.leading_whitespaces.substring(0, -length_diff), IndentationType.ADDED)
+    }
+
+    static lines_match_with_changed_indentation(removed_line, added_line, indetation) {
+        if (removed_line.trim_text !== added_line.trim_text) {
+            return false;
+        }
+
+        if (indetation.indent_type === IndentationType.REMOVED) {
+            return removed_line.leading_whitespaces === indetation.whitespace + added_line.leading_whitespaces;
+        }
+        if (indetation.indent_type === IndentationType.ADDED) {
+            return indetation.whitespace + removed_line.leading_whitespaces === added_line.leading_whitespaces;
+        }
+        throw "Invalid indentation type: " + indetation.indent_type;
     }
 }
 
@@ -61,9 +96,13 @@ class MatchingBlock {
   constructor(removed_line, added_line) {
       this.removed_block = new Block(removed_line.file, removed_line.line_no);
       this.added_block = new Block(added_line.file, added_line.line_no);
+      this.indentation = removed_line.calculate_indentation_change(added_line)
   }
 
   try_extend_with_line(removed_line, added_line){
+      if (!Line.lines_match_with_changed_indentation(removed_line, added_line, this.indentation)) {
+          return false;
+      }
       if (this.removed_block.can_extend_with_line(removed_line)
               && this.added_block.can_extend_with_line(added_line)) {
           this.removed_block.extend();
@@ -94,19 +133,13 @@ class MovedBlocksDetector {
         let extended = false;
 
         for (const removed_line of this.removed_lines) {
-            console.log("Removed line: " + JSON.stringify(removed_line));
             if (removed_line.trim_hash in this.trim_hash_to_array_of_added_lines){
-                // TODO verify text not only trim_hash
                 let added_lines = this.trim_hash_to_array_of_added_lines[removed_line.trim_hash];
-                console.log("Curently_matching_blocks: " + JSON.stringify(currently_matching_blocks));
                 for (const added_line of added_lines) {
                     let line_extended_any_block = false;
                     for (let i = currently_matching_blocks.length - 1; i >= 0; i--) { // iterate over list with removing from backward
                         let matching_block = currently_matching_blocks[i];
-                        console.log("   Added line: " + JSON.stringify(added_line));
-                        console.log("   Matching block: " + JSON.stringify(matching_block));
                         extended = matching_block.try_extend_with_line(removed_line, added_line);
-                        console.log("   Extended: " + extended);
                         if (extended) {
                             new_matching_blocks.push(matching_block);
                             line_extended_any_block = true;
@@ -114,11 +147,9 @@ class MovedBlocksDetector {
                         }
                     }
                     if (! line_extended_any_block) {
-                        console.log("Line did not extend any block");
                         new_matching_blocks.push(new MatchingBlock(removed_line, added_line))
                     }
                 }
-                console.log("")
             }
 
             for (const matching_block of currently_matching_blocks) {
@@ -132,6 +163,8 @@ class MovedBlocksDetector {
 }
 
 exports.Line = Line;
+exports.Indentation = Indentation;
+exports.IndentationType = IndentationType;
 exports.Block = Block;
 exports.MatchingBlock = MatchingBlock;
 exports.MovedBlocksDetector = MovedBlocksDetector;
