@@ -266,3 +266,5 @@ describe('MovedBlocksDetector', function() {
         JSON.stringify(new c.Block("file_with_added_lines", 14, 15)));
   });
 });
+
+// TODO test - remove single line - add it many times one after another
