@@ -9,8 +9,8 @@
 // @require      https://raw.githubusercontent.com/albrycht/MoveBlockDetector/master/src/moved_block_detector.js
 // ==/UserScript==
 
-const ADDED_LINES_SELECTOR = ".blob-code-addition .add-line-comment";
-const REMOVED_LINES_SELECTOR = ".blob-code-deletion .add-line-comment";
+const ADDED_LINES_SELECTOR = "td.blob-code-addition > button.add-line-comment";
+const REMOVED_LINES_SELECTOR = "td.blob-code-deletion > button.add-line-comment";
 const REMOVED_DATA_TYPE_ATTR = "deletion"
 const ADDED_DATA_TYPE_ATTR = "addition"
 const ALL_COLORS = ['#058DC7', '#50B432', '#ED561B', '#DDDF00', '#24CBE5', '#64E572', '#FF9655', '#FFF263', '#6AF9C4',
@@ -35,8 +35,9 @@ function getLine(item) {
 }
 
 function markLine(block, line_num, detected_block_index, data_type) {
-    const selector = `[data-path="${block.file}"][data-line="${line_num}"][data-type="${data_type}"]`
-    let add_comment_button_elem = document.querySelector(selector);
+    const button_selector_prefix = data_type == REMOVED_DATA_TYPE_ATTR ? REMOVED_LINES_SELECTOR : ADDED_LINES_SELECTOR
+    const add_comment_button_selector = button_selector_prefix +`[data-path="${block.file}"][data-line="${line_num}"][data-type="${data_type}"]`
+    let add_comment_button_elem = document.querySelector(add_comment_button_selector);
     let parent_node = add_comment_button_elem.parentNode;
     let parent_height = parent_node.clientHeight;
     let relative_line_num = line_num - block.start_line;
@@ -64,7 +65,7 @@ function markLine(block, line_num, detected_block_index, data_type) {
 
 function highlightDetectedBlock(block_index, detected_block) {
     // TODO moved detected blocks filtering to MovedBlocksDetector class
-    console.log("Detected block num: " + block_index + "   value: " + detected_block);
+    //console.log("Detected block num: " + block_index + "   value: " + detected_block);
     if (detected_block.removed_block.end_line - detected_block.removed_block.start_line + 1 < 3 ) {
         // Block is smaller then 3 lines - ignore
         return
@@ -97,4 +98,5 @@ function highlightDetectedBlock(block_index, detected_block) {
 })();
 
 // TODO detected block on non removed files (size of block = 1) on https://github.com/StarfishStorage/ansible/pull/219/files
-// TODO mark indetation change with ⎵ sign? 
+// TODO mark indetation change with ⎵ sign?
+// TODO test that last lines of file which are in matching block are added to detected blocks
