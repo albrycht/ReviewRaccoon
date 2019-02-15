@@ -164,3 +164,14 @@ class MovedBlocksDetector {
         return detected_blocks;
     }
 }
+
+if (exports !== undefined && exports !== null) {	
+    exports.Line = Line;	
+    exports.Indentation = Indentation;	
+    exports.IndentationType = IndentationType;	
+    exports.Block = Block;	
+    exports.MatchingBlock = MatchingBlock;	
+    exports.MovedBlocksDetector = MovedBlocksDetector;	
+    exports.DefaultDict = DefaultDict;	
+    exports.hashCode = hashCode;	
+} 
