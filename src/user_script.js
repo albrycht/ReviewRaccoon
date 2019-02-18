@@ -4,7 +4,7 @@
 // @version      0.1
 // @description  show moved blocks of code while doing PR review
 // @author       Michał Albrycht
-// @match        https://github.com/*/pull/*/files
+// @match        https://github.com/*/pull/*
 // @grant        none
 // @require      https://raw.githubusercontent.com/albrycht/MoveBlockDetector/master/src/moved_block_detector.js
 // ==/UserScript==
@@ -78,9 +78,7 @@ function highlightDetectedBlock(block_index, detected_block) {
     }
 }
 
-(function() {
-    'use strict';
-    // TODO load all large diffs javascript:(function(){[].forEach.call(document.querySelectorAll(".load-diff-button"),function(a){a.click()})})();
+function main() {
     const added_lines_elems = document.querySelectorAll(ADDED_LINES_SELECTOR);
     const removed_lines_elems = document.querySelectorAll(REMOVED_LINES_SELECTOR);
 
@@ -95,8 +93,19 @@ function highlightDetectedBlock(block_index, detected_block) {
         let [block_index, detected_block] = iter;
         highlightDetectedBlock(block_index, detected_block);
     }
+}
+
+(function() {
+    'use strict';
+    document.addEventListener('pjax:end', main, false);
+    main();
+    return
+    // TODO load all large diffs javascript:(function(){[].forEach.call(document.querySelectorAll(".load-diff-button"),function(a){a.click()})})();
 })();
 
-// TODO detected block on non removed files (size of block = 1) on https://github.com/StarfishStorage/ansible/pull/219/files
 // TODO mark indetation change with ⎵ sign?
 // TODO test that last lines of file which are in matching block are added to detected blocks
+
+// Example PR:
+// https://github.com/StarfishStorage/ansible/pull/219/files
+// https://github.com/albrycht/MoveBlockDetector/pull/1/files
