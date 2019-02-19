@@ -11,13 +11,13 @@
 
 const ADDED_LINES_SELECTOR = "td.blob-code-addition > button.add-line-comment";
 const REMOVED_LINES_SELECTOR = "td.blob-code-deletion > button.add-line-comment";
-const REMOVED_DATA_TYPE_ATTR = "deletion"
-const ADDED_DATA_TYPE_ATTR = "addition"
+const REMOVED_DATA_TYPE_ATTR = "deletion";
+const ADDED_DATA_TYPE_ATTR = "addition";
 const ALL_COLORS = ['#058DC7', '#50B432', '#ED561B', '#DDDF00', '#24CBE5', '#64E572', '#FF9655', '#FFF263', '#6AF9C4',
                     'red', 'orange', 'green', 'blue', 'purple', 'brown'];
 
 function insertDetectedBlockCssClass(){
-    var style = document.createElement('style');
+    const style = document.createElement('style');
     style.type = 'text/css';
     style.innerHTML = '.detectedMovedBlock { display: block; width: 10px; float: right; position: relative; margin: 0px -10px 0px -20px;}';
     document.getElementsByTagName('head')[0].appendChild(style);
@@ -35,17 +35,17 @@ function getLine(item) {
 }
 
 function markLine(block, line_num, detected_block_index, data_type) {
-    const button_selector_prefix = data_type == REMOVED_DATA_TYPE_ATTR ? REMOVED_LINES_SELECTOR : ADDED_LINES_SELECTOR
-    const add_comment_button_selector = button_selector_prefix +`[data-path="${block.file}"][data-line="${line_num}"][data-type="${data_type}"]`
+    const button_selector_prefix = data_type === REMOVED_DATA_TYPE_ATTR ? REMOVED_LINES_SELECTOR : ADDED_LINES_SELECTOR;
+    const add_comment_button_selector = button_selector_prefix +`[data-path="${block.file}"][data-line="${line_num}"][data-type="${data_type}"]`;
     let add_comment_button_elem = document.querySelector(add_comment_button_selector);
     let parent_node = add_comment_button_elem.parentNode;
     let parent_height = parent_node.clientHeight;
     let relative_line_num = line_num - block.start_line;
-    let id_prefix = `detected-block-${detected_block_index}-${relative_line_num}`
-    let oposite_data_type = data_type == REMOVED_DATA_TYPE_ATTR ? ADDED_DATA_TYPE_ATTR : REMOVED_DATA_TYPE_ATTR;
+    let id_prefix = `detected-block-${detected_block_index}-${relative_line_num}`;
+    let oposite_data_type = data_type === REMOVED_DATA_TYPE_ATTR ? ADDED_DATA_TYPE_ATTR : REMOVED_DATA_TYPE_ATTR;
     let block_color = ALL_COLORS[detected_block_index % ALL_COLORS.length];
 
-    var block_marker = document.createElement('a');
+    const block_marker = document.createElement('a');
     block_marker.innerHTML = ' ';
     block_marker.id = `${id_prefix}-${data_type}`;
     block_marker.href = `#${id_prefix}-${oposite_data_type}`;
@@ -54,13 +54,12 @@ function markLine(block, line_num, detected_block_index, data_type) {
     block_marker.style.backgroundColor = block_color;
     insertAfter(block_marker, add_comment_button_elem);
 
-    if (line_num == block.start_line) {
+    if (line_num === block.start_line) {
         parent_node.style.borderTop = `solid 1px ${block_color}`;
-    };
-
-    if (line_num == block.end_line) {
+    }
+    if (line_num === block.end_line) {
         parent_node.style.borderBottom = `solid 1px ${block_color}`;
-    };
+    }
 }
 
 function highlightDetectedBlock(block_index, detected_block) {
@@ -99,7 +98,6 @@ function main() {
     'use strict';
     document.addEventListener('pjax:end', main, false);
     main();
-    return
     // TODO load all large diffs javascript:(function(){[].forEach.call(document.querySelectorAll(".load-diff-button"),function(a){a.click()})})();
 })();
 

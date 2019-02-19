@@ -42,8 +42,8 @@ class Line {
             line_no = parseInt(line_no)
         }
         this.line_no = line_no;
-        this.trim_text = text.trim();
-        this.leading_whitespaces = text.substr(0, text.indexOf(this.trim_text.charAt(0)) - 1);
+        this.trim_text = text ? text.trim() : '';
+        this.leading_whitespaces = text ? text.substr(0, text.indexOf(this.trim_text.charAt(0)) - 1) : '';
         this.trim_hash = hashCode(this.trim_text)
     }
 
@@ -77,25 +77,37 @@ class Line {
 
 
 class Block {
-    constructor(file, start_line, end_line=null) {
-        this.file = file;
-        this.start_line = start_line;
-        this.end_line = end_line || start_line;
+    constructor(line, end_line_no, char_count) {
+        this.file = line.file;
+        this.start_line = line.line_no;
+        this.end_line = line.line_no;
+        this.char_count = line.trim_text.length;
+        if(arguments.length > 1) {
+            this.end_line = end_line_no;
+        }
+        if(arguments.length > 2) {
+            this.char_count = char_count;
+        }
+    }
+
+    get line_count() {
+        return this.end_line - this.start_line + 1
     }
 
     can_extend_with_line(line) {
         return (this.file === line.file) && (this.end_line + 1 === line.line_no);
     }
 
-    extend() {
+    extend(line) {
         this.end_line += 1;
+        this.char_count += line.trim_text.length;
     }
 }
 
 class MatchingBlock {
   constructor(removed_line, added_line) {
-      this.removed_block = new Block(removed_line.file, removed_line.line_no);
-      this.added_block = new Block(added_line.file, added_line.line_no);
+      this.removed_block = new Block(removed_line);
+      this.added_block = new Block(added_line);
       this.indentation = removed_line.calculate_indentation_change(added_line)
   }
 
@@ -105,8 +117,8 @@ class MatchingBlock {
       }
       if (this.removed_block.can_extend_with_line(removed_line)
               && this.added_block.can_extend_with_line(added_line)) {
-          this.removed_block.extend();
-          this.added_block.extend();
+          this.removed_block.extend(removed_line);
+          this.added_block.extend(added_line);
           return true;
       }
       return false;

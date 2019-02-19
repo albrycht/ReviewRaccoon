@@ -57,28 +57,39 @@ describe('Line', function() {
 
 describe('Block', function() {
   it('block ends on start line by default', function() {
-    const line_no = 13;
-    const block = new c.Block("some_file", line_no);
-    assert.strictEqual(block.end_line, line_no)
-  });
-
-  it('block end is set to correct value', function() {
-    const block = new c.Block("some_file", 10, 15);
-    assert.strictEqual(block.start_line, 10);
-    assert.strictEqual(block.end_line, 15);
+    const line = new c.Line("some_file", 12, "some_text");
+    const block = new c.Block(line);
+    assert.strictEqual(block.file, line.file);
+    assert.strictEqual(block.start_line, line.line_no);
+    assert.strictEqual(block.end_line, line.line_no);
+    assert.strictEqual(block.line_count, 1);
+    assert.strictEqual(block.char_count, "some_text".length);
   });
 
   it('can extend block with new line', function() {
     const file = "some_file";
     const line_no = 13;
-    const block = new c.Block(file, line_no);
-    let line = new c.Line(file, line_no + 1, "some_text");
+    const block = new c.Block(new c.Line(file, line_no, "some_text"));
+    let line = new c.Line(file, line_no + 1, "some_text2");
     assert.strictEqual(block.can_extend_with_line(line), true);
 
     // now check if can extend but with invalid line
     line = new c.Line(file, line_no + 10, "some_text2");
     assert.strictEqual(block.can_extend_with_line(line), false);
   });
+
+  it('extend block with new line', function() {
+    const file = "some_file";
+    const line_no = 13;
+    const block = new c.Block(new c.Line(file, line_no, "some_text"));
+    let line = new c.Line(file, line_no + 1, "some_text2");
+    block.extend(line);
+    assert.strictEqual(block.end_line, line_no + 1);
+    assert.strictEqual(block.char_count, "some_text".length + "some_text2".length);
+    assert.strictEqual(block.line_count, 2);
+  });
+
+
 });
 
 describe('MatchingBlock', function() {
@@ -158,9 +169,9 @@ describe('MovedBlocksDetector', function() {
     let detected_blocks = detector.detect_moved_blocks();
     assert.strictEqual(detected_blocks.length, 1);
     assert.strictEqual(JSON.stringify(detected_blocks[0].removed_block),
-        JSON.stringify(new c.Block("file_with_removed_lines", 1, 4)));
+        JSON.stringify({"file": "file_with_removed_lines", "start_line": 1, "end_line": 4, "char_count": 4 * 43}));
     assert.strictEqual(JSON.stringify(detected_blocks[0].added_block),
-        JSON.stringify(new c.Block("file_with_added_lines", 12, 15)));
+        JSON.stringify({"file": "file_with_added_lines", "start_line": 12, "end_line": 15, "char_count": 4 * 43}));
   });
 
   it('move block to 2 parts in 2 files', function() {
@@ -196,14 +207,14 @@ describe('MovedBlocksDetector', function() {
     let detected_blocks = detector.detect_moved_blocks();
     assert.strictEqual(detected_blocks.length, 2);
     assert.strictEqual(JSON.stringify(detected_blocks[0].removed_block),
-        JSON.stringify(new c.Block("file_with_removed_lines", 2, 4)));
+        JSON.stringify({"file": "file_with_removed_lines", "start_line": 2, "end_line": 4, "char_count": 3 * 43}));
     assert.strictEqual(JSON.stringify(detected_blocks[0].added_block),
-        JSON.stringify(new c.Block("file_with_added_lines_1", 13, 15)));
+        JSON.stringify({"file": "file_with_added_lines_1", "start_line": 13, "end_line": 15, "char_count": 3 * 43}));
 
     assert.strictEqual(JSON.stringify(detected_blocks[1].removed_block),
-        JSON.stringify(new c.Block("file_with_removed_lines", 3, 6)));
+        JSON.stringify({"file": "file_with_removed_lines", "start_line": 3, "end_line": 6, "char_count": 4 * 43}));
     assert.strictEqual(JSON.stringify(detected_blocks[1].added_block),
-        JSON.stringify(new c.Block("file_with_added_lines_2", 14, 17)));
+        JSON.stringify({"file": "file_with_added_lines_2", "start_line": 14, "end_line": 17, "char_count": 4 * 43}));
   });
 
   it('detect block with changed indentation', function() {
@@ -229,9 +240,9 @@ describe('MovedBlocksDetector', function() {
     let detected_blocks = detector.detect_moved_blocks();
     assert.strictEqual(detected_blocks.length, 1);
     assert.strictEqual(JSON.stringify(detected_blocks[0].removed_block),
-        JSON.stringify(new c.Block("file_with_removed_lines", 1, 4)));
+        JSON.stringify({"file": "file_with_removed_lines", "start_line": 1, "end_line": 4, "char_count": 4 * 43}));
     assert.strictEqual(JSON.stringify(detected_blocks[0].added_block),
-        JSON.stringify(new c.Block("file_with_added_lines", 12, 15)));
+        JSON.stringify({"file": "file_with_added_lines", "start_line": 12, "end_line": 15, "char_count": 4 * 43}));
   });
 
   it('do not merge block with inconsistent changed indentation', function() {
@@ -257,14 +268,44 @@ describe('MovedBlocksDetector', function() {
     let detected_blocks = detector.detect_moved_blocks();
     assert.strictEqual(detected_blocks.length, 2);
     assert.strictEqual(JSON.stringify(detected_blocks[0].removed_block),
-        JSON.stringify(new c.Block("file_with_removed_lines", 1, 2)));
+        JSON.stringify({"file": "file_with_removed_lines", "start_line": 1, "end_line": 2, "char_count": 2 * 43}));
     assert.strictEqual(JSON.stringify(detected_blocks[0].added_block),
-        JSON.stringify(new c.Block("file_with_added_lines", 12, 13)));
+        JSON.stringify({"file": "file_with_added_lines", "start_line": 12, "end_line": 13, "char_count": 2 * 43}));
     assert.strictEqual(JSON.stringify(detected_blocks[1].removed_block),
-        JSON.stringify(new c.Block("file_with_removed_lines", 3, 4)));
+        JSON.stringify({"file": "file_with_removed_lines", "start_line": 3, "end_line": 4, "char_count": 2 * 43}));
     assert.strictEqual(JSON.stringify(detected_blocks[1].added_block),
-        JSON.stringify(new c.Block("file_with_added_lines", 14, 15)));
+        JSON.stringify({"file": "file_with_added_lines", "start_line": 14, "end_line": 15, "char_count": 2 * 43}));
+  });
+
+  it('remove single line add it many times', function() {
+    let removed_file = "file_with_removed_lines";
+    let added_file = "file_with_added_lines";
+    let removed_lines = new ChangedLines(removed_file, {
+      1: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+    });
+
+    let added_lines = new ChangedLines(added_file, {
+      10: "-------------------------------------------",
+      11: "-------------------------------------------",
+      12: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      13: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      14: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+    });
+
+    let detector = new c.MovedBlocksDetector(removed_lines.to_array(), added_lines.to_array(), no_op);
+    let detected_blocks = detector.detect_moved_blocks();
+    assert.strictEqual(detected_blocks.length, 3);
+    assert.strictEqual(JSON.stringify(detected_blocks[0].removed_block),
+        JSON.stringify({"file": removed_file, "start_line": 1, "end_line": 1, "char_count": 43}));
+    assert.strictEqual(JSON.stringify(detected_blocks[0].added_block),
+        JSON.stringify({"file": added_file, "start_line": 12, "end_line": 12, "char_count": 43}));
+    assert.strictEqual(JSON.stringify(detected_blocks[1].removed_block),
+        JSON.stringify({"file": removed_file, "start_line": 1, "end_line": 1, "char_count": 43}));
+    assert.strictEqual(JSON.stringify(detected_blocks[1].added_block),
+        JSON.stringify({"file": added_file, "start_line": 13, "end_line": 13, "char_count": 43}));
+    assert.strictEqual(JSON.stringify(detected_blocks[2].removed_block),
+        JSON.stringify({"file": removed_file, "start_line": 1, "end_line": 1, "char_count": 43}));
+    assert.strictEqual(JSON.stringify(detected_blocks[2].added_block),
+        JSON.stringify({"file": added_file, "start_line": 14, "end_line": 14, "char_count": 43}));
   });
 });
-
-// TODO test - remove single line - add it many times one after another
