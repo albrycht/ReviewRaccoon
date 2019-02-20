@@ -77,6 +77,31 @@ function highlightDetectedBlock(block_index, detected_block) {
     }
 }
 
+function add_detect_moved_blocks_button() {
+    let button_container = document.querySelector(".pr-review-tools");
+    let details = document.createElement("details");
+    details.className = "diffbar-item details-reset details-overlay position-relative text-center";
+
+    let summary = document.createElement("summary");
+    summary.className = "btn btn-sm"
+    summary.textContent = "Detect moved blocks"
+    details.appendChild(summary);
+
+    details.addEventListener('click', function() {main();}, false);
+
+    button_container.appendChild(details);
+}
+
+function expand_large_diffs(){
+    console.log("expand");
+    let load_diff_buttons = document.querySelectorAll(".load-diff-button");
+    console.log(`Found ${load_diff_buttons.length} not expanded diffs`);
+    for (const load_diff_button of load_diff_buttons) {
+        console.log("Expanging diff");
+        load_diff_button.click();
+    }
+}
+
 function main() {
     const added_lines_elems = document.querySelectorAll(ADDED_LINES_SELECTOR);
     const removed_lines_elems = document.querySelectorAll(REMOVED_LINES_SELECTOR);
@@ -97,6 +122,7 @@ function main() {
 (function() {
     'use strict';
     document.addEventListener('pjax:end', main, false);
+    add_detect_moved_blocks_button();
     main();
     // TODO load all large diffs javascript:(function(){[].forEach.call(document.querySelectorAll(".load-diff-button"),function(a){a.click()})})();
 })();
