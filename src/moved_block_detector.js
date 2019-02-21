@@ -105,24 +105,32 @@ class Block {
 }
 
 class MatchingBlock {
-  constructor(removed_line, added_line) {
-      this.removed_block = new Block(removed_line);
-      this.added_block = new Block(added_line);
-      this.indentation = removed_line.calculate_indentation_change(added_line)
-  }
+    constructor(removed_line, added_line) {
+        this.removed_block = new Block(removed_line);
+        this.added_block = new Block(added_line);
+        this.indentation = removed_line.calculate_indentation_change(added_line)
+    }
 
-  try_extend_with_line(removed_line, added_line){
-      if (!Line.lines_match_with_changed_indentation(removed_line, added_line, this.indentation)) {
-          return false;
-      }
-      if (this.removed_block.can_extend_with_line(removed_line)
-              && this.added_block.can_extend_with_line(added_line)) {
-          this.removed_block.extend(removed_line);
-          this.added_block.extend(added_line);
-          return true;
-      }
-      return false;
-  }
+    try_extend_with_line(removed_line, added_line){
+        if (!Line.lines_match_with_changed_indentation(removed_line, added_line, this.indentation)) {
+            return false;
+        }
+        if (this.removed_block.can_extend_with_line(removed_line)
+            && this.added_block.can_extend_with_line(added_line)) {
+            this.removed_block.extend(removed_line);
+            this.added_block.extend(added_line);
+            return true;
+        }
+        return false;
+    }
+
+    get line_count() {
+        return Math.max(this.removed_block.line_count, this.added_block.line_count);
+    }
+
+    get char_count() {
+        return Math.max(this.removed_block.char_count, this.added_block.char_count);
+    }
 }
 
 class MovedBlocksDetector {
@@ -136,6 +144,16 @@ class MovedBlocksDetector {
         for (let line of Array.from(removed_lines_raw).map(raw_line_to_obj_func)) {
             this.removed_lines.push(line);
         }
+    }
+
+    filter_blocks(matching_blocks) {
+        let filtered_blocks = [];
+        for (const matching_block of matching_blocks) {
+            if (matching_block.line_count >= 3 || matching_block.char_count >= 30) {
+                filtered_blocks.push(matching_block)
+            }
+        }
+        return filtered_blocks;
     }
 
     detect_moved_blocks() {
@@ -173,7 +191,7 @@ class MovedBlocksDetector {
         for (const matching_block of currently_matching_blocks) {
             detected_blocks.push(matching_block)
         }
-        return detected_blocks;
+        return this.filter_blocks(detected_blocks);
     }
 }
 

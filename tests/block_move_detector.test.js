@@ -308,4 +308,35 @@ describe('MovedBlocksDetector', function() {
     assert.strictEqual(JSON.stringify(detected_blocks[2].added_block),
         JSON.stringify({"file": added_file, "start_line": 14, "end_line": 14, "char_count": 43}));
   });
+
+  it('filer out small blocks', function() {
+    let removed_lines = new ChangedLines("file_with_removed_lines", {
+      1: "1 1 1",
+      2: "2 2 2",
+    });
+
+    let added_lines = new ChangedLines("file_with_added_lines", {
+      11: "1 1 1",
+      12: "2 2 2",
+    });
+
+    let detector = new c.MovedBlocksDetector(removed_lines.to_array(), added_lines.to_array(), no_op);
+    let detected_blocks = detector.detect_moved_blocks();
+    assert.strictEqual(detected_blocks.length, 0);
+  });
+
+  it('even single line block can be detected if it is long enough', function() {
+    // now check that even single line block can be detected if it is long enough
+    let removed_lines = new ChangedLines("file_with_removed_lines", {
+      1: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+    });
+
+    let added_lines = new ChangedLines("file_with_added_lines", {
+      11: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+    });
+
+    let detector = new c.MovedBlocksDetector(removed_lines.to_array(), added_lines.to_array(), no_op);
+    let detected_blocks = detector.detect_moved_blocks();
+    assert.strictEqual(detected_blocks.length, 1);
+  })
 });

@@ -63,12 +63,7 @@ function markLine(block, line_num, detected_block_index, data_type) {
 }
 
 function highlightDetectedBlock(block_index, detected_block) {
-    // TODO moved detected blocks filtering to MovedBlocksDetector class
     //console.log("Detected block num: " + block_index + "   value: " + detected_block);
-    if (detected_block.removed_block.end_line - detected_block.removed_block.start_line + 1 < 3 ) {
-        // Block is smaller then 3 lines - ignore
-        return
-    }
     for(let line_num = detected_block.removed_block.start_line; line_num <= detected_block.removed_block.end_line; line_num++){
         markLine(detected_block.removed_block, line_num, block_index, REMOVED_DATA_TYPE_ATTR);
     }
@@ -83,8 +78,8 @@ function add_detect_moved_blocks_button() {
     details.className = "diffbar-item details-reset details-overlay position-relative text-center";
 
     let summary = document.createElement("summary");
-    summary.className = "btn btn-sm"
-    summary.textContent = "Detect moved blocks"
+    summary.className = "btn btn-sm";
+    summary.textContent = "Detect moved blocks";
     details.appendChild(summary);
 
     details.addEventListener('click', function() {main();}, false);
@@ -93,6 +88,7 @@ function add_detect_moved_blocks_button() {
 }
 
 function expand_large_diffs(){
+    // TODO fix loading large diffs
     console.log("expand");
     let load_diff_buttons = document.querySelectorAll(".load-diff-button");
     console.log(`Found ${load_diff_buttons.length} not expanded diffs`);
@@ -103,6 +99,7 @@ function expand_large_diffs(){
 }
 
 function main() {
+    expand_large_diffs();
     const added_lines_elems = document.querySelectorAll(ADDED_LINES_SELECTOR);
     const removed_lines_elems = document.querySelectorAll(REMOVED_LINES_SELECTOR);
 
@@ -124,11 +121,9 @@ function main() {
     document.addEventListener('pjax:end', main, false);
     add_detect_moved_blocks_button();
     main();
-    // TODO load all large diffs javascript:(function(){[].forEach.call(document.querySelectorAll(".load-diff-button"),function(a){a.click()})})();
 })();
 
 // TODO mark indetation change with ⎵ sign?
-// TODO test that last lines of file which are in matching block are added to detected blocks
 
 // Example PR:
 // https://github.com/StarfishStorage/ansible/pull/219/files
