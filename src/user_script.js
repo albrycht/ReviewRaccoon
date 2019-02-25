@@ -74,39 +74,68 @@ function highlightDetectedBlock(block_index, detected_block) {
 
 function add_detect_moved_blocks_button() {
     let button_container = document.querySelector(".pr-review-tools");
+    let existing_button = document.querySelector("#detect_moved_blocks");
+    if (existing_button !== null) {
+        console.log(`Button already exists`);
+        return
+    }
     let details = document.createElement("details");
     details.className = "diffbar-item details-reset details-overlay position-relative text-center";
 
     let summary = document.createElement("summary");
     summary.className = "btn btn-sm";
     summary.textContent = "Detect moved blocks";
+    summary.id = "detect_moved_blocks";
     details.appendChild(summary);
 
-    details.addEventListener('click', function() {main();}, false);
+    details.addEventListener('click', function() {main(false);}, false);
 
     button_container.appendChild(details);
 }
 
-function expand_large_diffs(){
-    // TODO fix loading large diffs
-    console.log("expand");
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+
+async function expand_large_diffs(){
     let load_diff_buttons = document.querySelectorAll(".load-diff-button");
-    console.log(`Found ${load_diff_buttons.length} not expanded diffs`);
     for (const load_diff_button of load_diff_buttons) {
-        console.log("Expanging diff");
         load_diff_button.click();
+    }
+    if (load_diff_buttons.length > 0) {
+        console.log(`Expanded ${load_diff_buttons.length} large diffs`);
+        await sleep(2000);
     }
 }
 
-function main() {
-    expand_large_diffs();
+async function clear_old_block_markers() {
+    let detected_blocks_markers = document.querySelectorAll(".detectedMovedBlock");
+    for (const detected_blocks_marker of detected_blocks_markers) {
+        detected_blocks_marker.parentNode.removeChild(detected_blocks_marker);
+    }
+}
+
+async function main(wait_for_page_load = true) {
+    console.log(`main`)
+    let url_regex = /\/files(#.*)?$|\/(commits\/\w+)$/g
+    if (!window.location.href.match(url_regex)){
+        return
+    }
+    clear_old_block_markers();
+    add_detect_moved_blocks_button();
+    if (wait_for_page_load) {
+        await sleep(1500);
+    }
+    await expand_large_diffs();
     const added_lines_elems = document.querySelectorAll(ADDED_LINES_SELECTOR);
     const removed_lines_elems = document.querySelectorAll(REMOVED_LINES_SELECTOR);
 
     let detector = new MovedBlocksDetector(Array.from(removed_lines_elems), Array.from(added_lines_elems), getLine);
     let detected_blocks = detector.detect_moved_blocks();
-
+    console.log(`Detected ${detected_blocks.length} blocks`)
     if (detected_blocks) {
+
         insertDetectedBlockCssClass();
     }
 
@@ -119,7 +148,6 @@ function main() {
 (function() {
     'use strict';
     document.addEventListener('pjax:end', main, false);
-    add_detect_moved_blocks_button();
     main();
 })();
 
@@ -127,4 +155,6 @@ function main() {
 
 // Example PR:
 // https://github.com/StarfishStorage/ansible/pull/219/files
+// https://github.com/StarfishStorage/starfish/pull/5305
+// https://github.com/StarfishStorage/starfish/pull/5313
 // https://github.com/albrycht/MoveBlockDetector/pull/1/files
