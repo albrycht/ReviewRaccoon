@@ -74,62 +74,50 @@ class Line {
     }
 }
 
-
-
-class Block {
-    constructor(line, end_line_no, char_count) {
-        this.file = line.file;
-        this.start_line = line.line_no;
-        this.end_line = line.line_no;
-        this.char_count = line.trim_text.length;
-        if(arguments.length > 1) {
-            this.end_line = end_line_no;
-        }
-        if(arguments.length > 2) {
-            this.char_count = char_count;
-        }
+class MatchingLine {
+    constructor(removed_line, added_line) {
+        this.added_line = added_line;
+        this.removed_line = removed_line;
     }
 
-    get line_count() {
-        return this.end_line - this.start_line + 1
-    }
-
-    can_extend_with_line(line) {
-        return (this.file === line.file) && (this.end_line + 1 === line.line_no);
-    }
-
-    extend(line) {
-        this.end_line += 1;
-        this.char_count += line.trim_text.length;
+    can_be_extended_with_lines(removed_line, added_line) {
+        return this.removed_line.is_line_before(removed_line) && this.added_line.is_line_before(added_line)
     }
 }
 
 class MatchingBlock {
     constructor(removed_line, added_line) {
-        this.removed_block = new Block(removed_line);
-        this.added_block = new Block(added_line);
-        this.indentation = removed_line.calculate_indentation_change(added_line)
+        this.lines = [new MatchingLine(removed_line, added_line)];
+        this.last_removed_line = removed_line;
+        this.last_added_line = added_line;
+        this.indentation = removed_line.calculate_indentation_change(added_line);
     }
 
     try_extend_with_line(removed_line, added_line){
         if (!Line.lines_match_with_changed_indentation(removed_line, added_line, this.indentation)) {
             return false;
         }
-        if (this.removed_block.can_extend_with_line(removed_line)
-            && this.added_block.can_extend_with_line(added_line)) {
-            this.removed_block.extend(removed_line);
-            this.added_block.extend(added_line);
+        if (this.last_removed_line.is_line_before(removed_line)
+            && this.last_added_line.is_line_before(added_line)) {
+            this.lines.push(new MatchingLine(removed_line, added_line));
+            this.last_removed_line = removed_line;
+            this.last_added_line = added_line;
             return true;
         }
         return false;
     }
 
     get line_count() {
-        return Math.max(this.removed_block.line_count, this.added_block.line_count);
+        return this.lines.length;
     }
 
     get char_count() {
-        return Math.max(this.removed_block.char_count, this.added_block.char_count);
+        let sum = 0;
+        for (let matching_line of this.lines) {
+            sum += Math.max(matching_line.added_line.trim_text.length,
+                            matching_line.removed_line.trim_text.length);
+        }
+        return sum;
     }
 }
 
@@ -199,8 +187,7 @@ if (exports !== undefined && exports !== null) {
     exports.Line = Line;	
     exports.Indentation = Indentation;	
     exports.IndentationType = IndentationType;	
-    exports.Block = Block;	
-    exports.MatchingBlock = MatchingBlock;	
+    exports.MatchingBlock = MatchingBlock;
     exports.MovedBlocksDetector = MovedBlocksDetector;	
     exports.DefaultDict = DefaultDict;	
     exports.hashCode = hashCode;	
