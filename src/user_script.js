@@ -7,6 +7,7 @@
 // @match        https://github.com/*/pull/*
 // @grant        none
 // @require      https://raw.githubusercontent.com/albrycht/MoveBlockDetector/master/src/moved_block_detector.js
+// @require      https://raw.githubusercontent.com/google/diff-match-patch/master/javascript/diff_match_patch.js
 // ==/UserScript==
 
 const ADDED_LINES_SELECTOR = "td.blob-code-addition > button.add-line-comment";
@@ -64,12 +65,20 @@ function markLine(block, line_num, detected_block_index, data_type) {
 
 function highlightDetectedBlock(block_index, detected_block) {
     //console.log("Detected block num: " + block_index + "   value: " + detected_block);
-    for(let line_num = detected_block.removed_block.start_line; line_num <= detected_block.removed_block.end_line; line_num++){
-        markLine(detected_block.removed_block, line_num, block_index, REMOVED_DATA_TYPE_ATTR);
+    for (const matching_lines of detected_block.lines) {
+        let removed_line = matching_lines.removed_line;
+        let added_line = matching_lines.added_line;
+        let dmp = new diff_match_patch();
+        let diff = dmp.diff_main(removed_line.leading_whitespaces + removed_line.trim_text,
+                  added_line.leading_whitespaces + added_line.trim_text)
+        console.log(`DIFF: ${diff}`)
     }
-    for(let line_num = detected_block.added_block.start_line; line_num <= detected_block.added_block.end_line; line_num++){
-        markLine(detected_block.added_block, line_num, block_index, ADDED_DATA_TYPE_ATTR);
-    }
+    // for(let line_num = detected_block.removed_block.start_line; line_num <= detected_block.removed_block.end_line; line_num++){
+    //     markLine(detected_block.removed_block, line_num, block_index, REMOVED_DATA_TYPE_ATTR);
+    // }
+    // for(let line_num = detected_block.added_block.start_line; line_num <= detected_block.added_block.end_line; line_num++){
+    //     markLine(detected_block.added_block, line_num, block_index, ADDED_DATA_TYPE_ATTR);
+    // }
 }
 
 function add_detect_moved_blocks_button() {
