@@ -1,3 +1,5 @@
+const fuzzyset = require('./fuzzyset');
+
 class DefaultDict {
   constructor(defaultInit) {
     return new Proxy({}, {
@@ -125,9 +127,13 @@ class MovedBlocksDetector {
     constructor(removed_lines_raw, added_lines_raw, raw_line_to_obj_func){
         this.removed_lines = [];
         this.trim_hash_to_array_of_added_lines = new DefaultDict(Array);
+        this.trim_text_to_array_of_added_lines = new DefaultDict(Array);
+        this.added_lines_fuzzy_set = FuzzySet();
 
         for (let line of Array.from(added_lines_raw).map(raw_line_to_obj_func)) {
-            this.trim_hash_to_array_of_added_lines[line.trim_hash].push(line)
+            this.trim_hash_to_array_of_added_lines[line.trim_hash].push(line);
+            this.trim_text_to_array_of_added_lines[line.trim_text].push(line);
+            this.added_lines_fuzzy_set.add(line.trim_text);
         }
         for (let line of Array.from(removed_lines_raw).map(raw_line_to_obj_func)) {
             this.removed_lines.push(line);
@@ -151,8 +157,14 @@ class MovedBlocksDetector {
         let extended = false;
 
         for (const removed_line of this.removed_lines) {
-            if (removed_line.trim_hash in this.trim_hash_to_array_of_added_lines){
-                let added_lines = this.trim_hash_to_array_of_added_lines[removed_line.trim_hash];
+            let fuzzy_matching_pairs = this.added_lines_fuzzy_set.get(removed_line.trim_text, null, 0.5);
+
+            if (fuzzy_matching_pairs === null){
+                continue
+            }
+            for (const fuzz_pair of fuzzy_matching_pairs) {
+                let [match_probability, text] = fuzz_pair;
+                let added_lines = this.trim_text_to_array_of_added_lines[text];
                 for (const added_line of added_lines) {
                     let line_extended_any_block = false;
                     for (let i = currently_matching_blocks.length - 1; i >= 0; i--) { // iterate over list with removing from backward
@@ -164,7 +176,7 @@ class MovedBlocksDetector {
                             currently_matching_blocks.splice(i, 1); // remove current element from list
                         }
                     }
-                    if (! line_extended_any_block) {
+                    if (!line_extended_any_block) {
                         new_matching_blocks.push(new MatchingBlock(removed_line, added_line))
                     }
                 }

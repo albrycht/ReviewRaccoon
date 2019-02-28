@@ -74,7 +74,7 @@ describe('MatchingBlock', function() {
     extended = matching_block.try_extend_with_line(removed_line_2, added_line_2);
     assert.strictEqual(extended, false);
     assert.strictEqual(matching_block.last_removed_line.line_no, 3);
-    assert.strictEqual(matching_block.last_added_line.line_no, 13)
+    assert.strictEqual(matching_block.last_added_line.line_no, 13);
     assert.strictEqual(matching_block.lines.length, 2);
   });
 
@@ -323,4 +323,21 @@ describe('MovedBlocksDetector', function() {
     let detected_blocks = detector.detect_moved_blocks();
     assert.strictEqual(detected_blocks.length, 1);
   })
+
+  it('small changes are allowed in moved block', function() {
+    // now check that even single line block can be detected if it is long enough
+    let removed_lines = new ChangedLines("file_with_removed_lines", {
+      1: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+    });
+
+    let added_lines = new ChangedLines("file_with_added_lines", {
+      11: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 2",
+    });
+
+    let detector = new c.MovedBlocksDetector(removed_lines.to_array(), added_lines.to_array(), no_op);
+    let detected_blocks = detector.detect_moved_blocks();
+    assert.strictEqual(detected_blocks.length, 1);
+  })
+
+
 });

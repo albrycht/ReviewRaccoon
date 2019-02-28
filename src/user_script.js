@@ -35,16 +35,18 @@ function getLine(item) {
     return new Line(file, line_no, text);
 }
 
-function markLine(block, line_num, detected_block_index, data_type) {
+function markLine(line, line_in_block_index, detected_block_index, data_type, is_first_line, is_last_line, replace_html_content) {
     const button_selector_prefix = data_type === REMOVED_DATA_TYPE_ATTR ? REMOVED_LINES_SELECTOR : ADDED_LINES_SELECTOR;
-    const add_comment_button_selector = button_selector_prefix +`[data-path="${block.file}"][data-line="${line_num}"][data-type="${data_type}"]`;
+    const add_comment_button_selector = button_selector_prefix +`[data-path="${line.file}"][data-line="${line.line_no}"][data-type="${data_type}"]`;
     let add_comment_button_elem = document.querySelector(add_comment_button_selector);
     let parent_node = add_comment_button_elem.parentNode;
     let parent_height = parent_node.clientHeight;
-    let relative_line_num = line_num - block.start_line;
-    let id_prefix = `detected-block-${detected_block_index}-${relative_line_num}`;
+    let id_prefix = `detected-block-${detected_block_index}-${line_in_block_index}`;
     let oposite_data_type = data_type === REMOVED_DATA_TYPE_ATTR ? ADDED_DATA_TYPE_ATTR : REMOVED_DATA_TYPE_ATTR;
     let block_color = ALL_COLORS[detected_block_index % ALL_COLORS.length];
+
+    let line_content_elem = parent_node.querySelector('.blob-code-inner.blob-code-marker');
+    line_content_elem.innerHTML = replace_html_content;
 
     const block_marker = document.createElement('a');
     block_marker.innerHTML = ' ';
@@ -55,37 +57,55 @@ function markLine(block, line_num, detected_block_index, data_type) {
     block_marker.style.backgroundColor = block_color;
     insertAfter(block_marker, add_comment_button_elem);
 
-    if (line_num === block.start_line) {
+    if (is_first_line) {
         parent_node.style.borderTop = `solid 1px ${block_color}`;
     }
-    if (line_num === block.end_line) {
+    if (is_last_line) {
         parent_node.style.borderBottom = `solid 1px ${block_color}`;
     }
 }
 
+function get_diff_part_as_html(diff_op, text, diff_op_to_skip){
+    if (diff_op === diff_op_to_skip){
+        return '';
+    }
+    if (diff_op === 1 || diff_op === -1) {
+        return `<span class='x'>${text}</span>`;
+    }
+    return text;
+}
+
+
+
 function highlightDetectedBlock(block_index, detected_block) {
-    //console.log("Detected block num: " + block_index + "   value: " + detected_block);
-    for (const matching_lines of detected_block.lines) {
+    for (const iter of detected_block.lines.entries()) {
+        let [line_in_block_index, matching_lines] = iter;
         let removed_line = matching_lines.removed_line;
         let added_line = matching_lines.added_line;
         let dmp = new diff_match_patch();
         let diff = dmp.diff_main(removed_line.leading_whitespaces + removed_line.trim_text,
-                  added_line.leading_whitespaces + added_line.trim_text)
-        console.log(`DIFF: ${diff}`)
+                                 added_line.leading_whitespaces + added_line.trim_text);
+        let removed_line_html = '';
+        let added_line_html = '';
+        for (let i=0; i<diff.length; i++) {
+            console.log(`i=${i}`);
+            let diff_part = diff[i];
+            let [op, text] = diff_part;
+            removed_line_html += get_diff_part_as_html(op, text, 1);
+            added_line_html += get_diff_part_as_html(op, text, -1)
+        }
+        let is_first_line = line_in_block_index === 0;
+        let is_last_line = line_in_block_index === detected_block.lines.length - 1;
+        console.log(`Line_in_block_index: ${line_in_block_index}, lines.length: ${detected_block.lines.length - 1}, is_first_line: ${is_first_line}, is_last_line: ${is_last_line}`);
+        markLine(removed_line, line_in_block_index, block_index, REMOVED_DATA_TYPE_ATTR, is_first_line, is_last_line, removed_line_html);
+        markLine(added_line, line_in_block_index, block_index, ADDED_DATA_TYPE_ATTR, is_first_line, is_last_line, added_line_html)
     }
-    // for(let line_num = detected_block.removed_block.start_line; line_num <= detected_block.removed_block.end_line; line_num++){
-    //     markLine(detected_block.removed_block, line_num, block_index, REMOVED_DATA_TYPE_ATTR);
-    // }
-    // for(let line_num = detected_block.added_block.start_line; line_num <= detected_block.added_block.end_line; line_num++){
-    //     markLine(detected_block.added_block, line_num, block_index, ADDED_DATA_TYPE_ATTR);
-    // }
 }
 
 function add_detect_moved_blocks_button() {
     let button_container = document.querySelector(".pr-review-tools");
     let existing_button = document.querySelector("#detect_moved_blocks");
     if (existing_button !== null) {
-        console.log(`Button already exists`);
         return
     }
     let details = document.createElement("details");
@@ -125,9 +145,20 @@ async function clear_old_block_markers() {
     }
 }
 
+async function patch_diff_match_patch_lib(){
+    // https://github.com/google/diff-match-patch/issues/39
+    if (typeof Symbol === 'function') {
+        diff_match_patch.Diff.prototype[Symbol.iterator] = function* () {
+          yield this[0];
+          yield this[1];
+        };
+    }
+}
+
 async function main(wait_for_page_load = true) {
-    console.log(`main`)
-    let url_regex = /\/files(#.*)?$|\/(commits\/\w+)$/g
+    console.log(`main`);
+    await patch_diff_match_patch_lib();
+    let url_regex = /\/files(#.*)?$|\/(commits\/\w+)$/g;
     if (!window.location.href.match(url_regex)){
         return
     }
@@ -142,7 +173,7 @@ async function main(wait_for_page_load = true) {
 
     let detector = new MovedBlocksDetector(Array.from(removed_lines_elems), Array.from(added_lines_elems), getLine);
     let detected_blocks = detector.detect_moved_blocks();
-    console.log(`Detected ${detected_blocks.length} blocks`)
+    console.log(`Detected ${detected_blocks.length} blocks`);
     if (detected_blocks) {
 
         insertDetectedBlockCssClass();
@@ -159,8 +190,6 @@ async function main(wait_for_page_load = true) {
     document.addEventListener('pjax:end', main, false);
     main();
 })();
-
-// TODO mark indetation change with ⎵ sign?
 
 // Example PR:
 // https://github.com/StarfishStorage/ansible/pull/219/files
