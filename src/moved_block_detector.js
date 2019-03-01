@@ -66,10 +66,6 @@ class Line {
     }
 
     static lines_match_with_changed_indentation(removed_line, added_line, indetation) {
-        if (removed_line.trim_text !== added_line.trim_text) {
-            return false;
-        }
-
         if (indetation.indent_type === IndentationType.REMOVED) {
             return removed_line.leading_whitespaces === indetation.whitespace + added_line.leading_whitespaces;
         }
@@ -147,7 +143,7 @@ class MovedBlocksDetector {
     filter_blocks(matching_blocks) {
         let filtered_blocks = [];
         for (const matching_block of matching_blocks) {
-            if (matching_block.line_count >= 3 || matching_block.char_count >= 30) {
+            if (matching_block.line_count >= 2 && matching_block.char_count >= 30) {
                 filtered_blocks.push(matching_block)
             }
         }

@@ -256,41 +256,45 @@ describe('MovedBlocksDetector', function() {
     assert.strictEqual(detected_blocks[1].char_count, 2 * 43);
   });
 
-  it('remove single line add it many times', function() {
+  it('remove lines add it many times', function() {
     let removed_file = "file_with_removed_lines";
     let added_file = "file_with_added_lines";
     let removed_lines = new ChangedLines(removed_file, {
       1: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      2: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
     });
 
     let added_lines = new ChangedLines(added_file, {
       10: "-------------------------------------------",
       11: "-------------------------------------------",
       12: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
-      13: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      13: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
       14: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      15: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+      16: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      17: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
     });
 
     let detector = new c.MovedBlocksDetector(removed_lines.to_array(), added_lines.to_array(), no_op);
     let detected_blocks = detector.detect_moved_blocks();
     assert.strictEqual(detected_blocks.length, 3);
     assert.strictEqual(detected_blocks[0].lines[0].removed_line.line_no, 1);
+    assert.strictEqual(detected_blocks[0].last_removed_line.line_no, 2);
     assert.strictEqual(detected_blocks[0].lines[0].added_line.line_no, 12);
-    assert.strictEqual(detected_blocks[0].last_removed_line.line_no, 1);
-    assert.strictEqual(detected_blocks[0].last_added_line.line_no, 12);
-    assert.strictEqual(detected_blocks[0].line_count, 1);
+    assert.strictEqual(detected_blocks[0].last_added_line.line_no, 13);
+    assert.strictEqual(detected_blocks[0].line_count, 2);
 
     assert.strictEqual(detected_blocks[1].lines[0].removed_line.line_no, 1);
-    assert.strictEqual(detected_blocks[1].lines[0].added_line.line_no, 13);
-    assert.strictEqual(detected_blocks[1].last_removed_line.line_no, 1);
-    assert.strictEqual(detected_blocks[1].last_added_line.line_no, 13);
-    assert.strictEqual(detected_blocks[1].line_count, 1);
+    assert.strictEqual(detected_blocks[1].last_removed_line.line_no, 2);
+    assert.strictEqual(detected_blocks[1].lines[0].added_line.line_no, 14);
+    assert.strictEqual(detected_blocks[1].last_added_line.line_no, 15);
+    assert.strictEqual(detected_blocks[1].line_count, 2);
 
     assert.strictEqual(detected_blocks[2].lines[0].removed_line.line_no, 1);
-    assert.strictEqual(detected_blocks[2].lines[0].added_line.line_no, 14);
-    assert.strictEqual(detected_blocks[2].last_removed_line.line_no, 1);
-    assert.strictEqual(detected_blocks[2].last_added_line.line_no, 14);
-    assert.strictEqual(detected_blocks[2].line_count, 1);
+    assert.strictEqual(detected_blocks[2].last_removed_line.line_no, 2);
+    assert.strictEqual(detected_blocks[2].lines[0].added_line.line_no, 16);
+    assert.strictEqual(detected_blocks[2].last_added_line.line_no, 17);
+    assert.strictEqual(detected_blocks[2].line_count, 2);
   });
 
   it('filer out small blocks', function() {
@@ -309,7 +313,7 @@ describe('MovedBlocksDetector', function() {
     assert.strictEqual(detected_blocks.length, 0);
   });
 
-  it('even single line block can be detected if it is long enough', function() {
+  it('at least 2 lines to detect single moved block', function() {
     // now check that even single line block can be detected if it is long enough
     let removed_lines = new ChangedLines("file_with_removed_lines", {
       1: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
@@ -321,23 +325,113 @@ describe('MovedBlocksDetector', function() {
 
     let detector = new c.MovedBlocksDetector(removed_lines.to_array(), added_lines.to_array(), no_op);
     let detected_blocks = detector.detect_moved_blocks();
+    assert.strictEqual(detected_blocks.length, 0);
+
+
+    // And now increase number of moved lines to 2
+    removed_lines = new ChangedLines("file_with_removed_lines", {
+      1: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      2: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+    });
+
+    added_lines = new ChangedLines("file_with_added_lines", {
+      11: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      12: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+    });
+
+    detector = new c.MovedBlocksDetector(removed_lines.to_array(), added_lines.to_array(), no_op);
+    detected_blocks = detector.detect_moved_blocks();
     assert.strictEqual(detected_blocks.length, 1);
-  })
+  });
 
   it('small changes are allowed in moved block', function() {
     // now check that even single line block can be detected if it is long enough
     let removed_lines = new ChangedLines("file_with_removed_lines", {
       1: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      2: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
     });
 
     let added_lines = new ChangedLines("file_with_added_lines", {
-      11: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 2",
+      11: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1--",
+      12: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2--",
     });
 
     let detector = new c.MovedBlocksDetector(removed_lines.to_array(), added_lines.to_array(), no_op);
     let detected_blocks = detector.detect_moved_blocks();
     assert.strictEqual(detected_blocks.length, 1);
-  })
+    assert.strictEqual(detected_blocks[0].line_count, 2);
+  });
 
+  it('check Starfish ansible code moved', function() {
+    // now check that even single line block can be detected if it is long enough
+    let removed_lines = new ChangedLines("file_with_removed_lines", {
+      1: "  - name: add ubuntu toolchain test PPA with gcc-7",
+      2: "    apt_repository: repo='ppa:ubuntu-toolchain-r/test'",
+      3: "",
+      4: "  - name: install Starfish-compiled Pythons",
+      5: "    apt: name={{ item }} state=latest update_cache=true allow_unauthenticated=true",
+      6: "    with_items:",
+      7: "      # when installing Python module which requires compilation step, Python will use the same",
+      8: "      # compiler command as the one use to compile Python. On Ubuntu Python is compiled with gcc-7, so",
+      9: "      # gcc-7 is needed, otherwise packages requiring compilation won't install (e.g. cryptography).",
+      10: "      - gcc-7",
+      11: "      - sf-python27",
+      12: "      - sf-python36",
+      13: "      - sf-python36-shared",
+      14: "",
+      15: "  - name: create symlink /usr/local/bin/python3.6",
+      16: "    file:",
+      17: "      src: /opt/starfish/python3.6/bin/python3.6",
+      18: "      dest: /usr/local/bin/python3.6",
+      19: "      state: link",
+      21: "",
+    });
+
+    let added_lines = new ChangedLines("file_with_added_lines", {
+      11: "    - name: add Starfish misc repo",
+      12: "      apt_repository:",
+      13: "        repo: \"deb https://starfishstorage.bintray.com/starfish_misc_apt {{ ansible_distribution_release }} non-free\"",
+      14: "        state: present",
+      15: "        filename: starfish-misc",
+      16: "",
+      17: "    - name: install Starfish-compiled Pythons",
+      18: "      apt: name={{ item }} state=latest update_cache=true",
+      19: "      with_items:",
+      20: "        # when installing Python module which requires compilation step, Python will use the same",
+      21: "        # compiler command as the one use to compile Python. On Ubuntu Python is compiled with gcc-7, so",
+      22: "        # gcc-7 is needed, otherwise packages requiring compilation won't install (e.g. cryptography).",
+      23: "        - gcc-7",
+      24: "        - sf-python27",
+      25: "        - sf-python36",
+      26: "        - sf-python36-shared",
+      27: "",
+      28: "    - name: create symlink /usr/local/bin/python3.6",
+      29: "      file:",
+      30: "        src: /opt/starfish/python3.6/bin/python3.6",
+      31: "        dest: /usr/local/bin/python3.6",
+      32: "        state: link",
+    });
+
+    let detector = new c.MovedBlocksDetector(removed_lines.to_array(), added_lines.to_array(), no_op);
+    let detected_blocks = detector.detect_moved_blocks();
+    assert.strictEqual(detected_blocks.length, 2); //TODO matching empty line between blocks - this should be one block!
+
+    for (let detected_block of detected_blocks) {
+      let line0 = detected_block.lines[0];
+      console.log(`Removed: ${line0.removed_line.line_no}-${detected_block.last_removed_line.line_no}   ` +
+                  `Added: ${line0.added_line.line_no}-${detected_block.last_added_line.line_no}`);
+    }
+    assert.strictEqual(detected_blocks[0].lines[0].removed_line.line_no, 4);
+    assert.strictEqual(detected_blocks[0].last_removed_line.line_no, 13);
+    assert.strictEqual(detected_blocks[0].lines[0].added_line.line_no, 17);
+    assert.strictEqual(detected_blocks[0].last_added_line.line_no, 26);
+    assert.strictEqual(detected_blocks[0].line_count, 10);
+
+    assert.strictEqual(detected_blocks[1].lines[0].removed_line.line_no, 15);
+    assert.strictEqual(detected_blocks[1].last_removed_line.line_no, 19);
+    assert.strictEqual(detected_blocks[1].lines[0].added_line.line_no, 28);
+    assert.strictEqual(detected_blocks[1].last_added_line.line_no, 32);
+    assert.strictEqual(detected_blocks[1].line_count, 5);
+  })
 
 });
