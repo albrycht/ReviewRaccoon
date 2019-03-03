@@ -164,7 +164,7 @@ class MovedBlocksDetector {
             }
             for (const fuzz_pair of fuzzy_matching_pairs) {
                 let [match_probability, text] = fuzz_pair;
-                console.log(`ORYG: ${removed_line.trim_text}\nCOPY: ${text}\nPROB: ${match_probability}\n`);
+                // console.log(`ORYG: ${removed_line.trim_text}\nCOPY: ${text}\nPROB: ${match_probability}\n`);
                 let added_lines = this.trim_text_to_array_of_added_lines[text];
                 for (const added_line of added_lines) {
                     let line_extended_any_block = false;
