@@ -11,13 +11,13 @@ describe('Line', function() {
 
   it('calculating leading whitespaces', function() {
     const line = new c.Line("file", 12, "    some_text   ");
-    assert.strictEqual(line.leading_whitespaces, "   ");
+    assert.strictEqual(line.leading_whitespaces, "    ");
     assert.strictEqual(line.trim_text, "some_text")
   });
 
   it('calculate indentation change', function() {
-    const line_removed = new c.Line("file", 12, "    some_text   ");
-    const line_added = new c.Line("file2", 100, "         some_text   ");
+    let line_removed = new c.Line("file", 12, "    some_text   ");
+    let line_added = new c.Line("file2", 100, "         some_text   ");
     let indentation = line_removed.calculate_indentation_change(line_added);
     assert.strictEqual(indentation.indent_type, c.IndentationType.ADDED);
     assert.strictEqual(indentation.whitespace, "     ");
@@ -25,7 +25,14 @@ describe('Line', function() {
     // now the other way (from added to removed)
     indentation = line_added.calculate_indentation_change(line_removed);
     assert.strictEqual(indentation.indent_type, c.IndentationType.REMOVED);
-    assert.strictEqual(indentation.whitespace, "     ")
+    assert.strictEqual(indentation.whitespace, "     ");
+
+    // now the other way (from added to removed)
+    line_removed = new c.Line("file", 12, "    def _build_id_from_environ():");
+    line_added = new c.Line("file2", 100, "def _build_id_from_environ():");
+    indentation = line_added.calculate_indentation_change(line_removed);
+    assert.strictEqual(indentation.indent_type, c.IndentationType.ADDED);
+    assert.strictEqual(indentation.whitespace, "    ")
   });
 
   it('lines are matching with changed indentation', function() {
