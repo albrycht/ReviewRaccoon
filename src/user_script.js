@@ -6,6 +6,7 @@
 // @author       Michał Albrycht
 // @match        https://github.com/*/pull/*
 // @grant        none
+// @require      https://raw.githubusercontent.com/albrycht/MoveBlockDetector/master/src/fuzzyset.js
 // @require      https://raw.githubusercontent.com/albrycht/MoveBlockDetector/master/src/moved_block_detector.js
 // @require      https://raw.githubusercontent.com/google/diff-match-patch/master/javascript/diff_match_patch.js
 // ==/UserScript==
@@ -85,10 +86,10 @@ function highlightDetectedBlock(block_index, detected_block) {
         let dmp = new diff_match_patch();
         let diff = dmp.diff_main(removed_line.leading_whitespaces + removed_line.trim_text,
                                  added_line.leading_whitespaces + added_line.trim_text);
+        dmp.diff_cleanupSemantic(diff);
         let removed_line_html = '';
         let added_line_html = '';
         for (let i=0; i<diff.length; i++) {
-            console.log(`i=${i}`);
             let diff_part = diff[i];
             let [op, text] = diff_part;
             removed_line_html += get_diff_part_as_html(op, text, 1);
@@ -96,7 +97,6 @@ function highlightDetectedBlock(block_index, detected_block) {
         }
         let is_first_line = line_in_block_index === 0;
         let is_last_line = line_in_block_index === detected_block.lines.length - 1;
-        console.log(`Line_in_block_index: ${line_in_block_index}, lines.length: ${detected_block.lines.length - 1}, is_first_line: ${is_first_line}, is_last_line: ${is_last_line}`);
         markLine(removed_line, line_in_block_index, block_index, REMOVED_DATA_TYPE_ATTR, is_first_line, is_last_line, removed_line_html);
         markLine(added_line, line_in_block_index, block_index, ADDED_DATA_TYPE_ATTR, is_first_line, is_last_line, added_line_html)
     }

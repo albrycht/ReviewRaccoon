@@ -439,6 +439,56 @@ describe('MovedBlocksDetector', function() {
     assert.strictEqual(detected_blocks[1].lines[0].added_line.line_no, 28);
     assert.strictEqual(detected_blocks[1].last_added_line.line_no, 32);
     assert.strictEqual(detected_blocks[1].line_count, 5);
+  });
+
+  it('whitespace line do not break matching block', function() {
+    let removed_lines = new ChangedLines("file_with_removed_lines", {
+      1: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      2: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+      3: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
+      4: "   ",
+      5: "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+      6: "5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5"
+    });
+
+    let added_lines = new ChangedLines("file_with_added_lines", {
+      10: "-------------------------------------------",
+      11: "-------------------------------------------",
+      12: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      13: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+      14: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
+      15: "   ",
+      16: "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+      17: "-------------------------------------------",
+    });
+
+    let detector = new c.MovedBlocksDetector(removed_lines.to_array(), added_lines.to_array(), no_op);
+    let detected_blocks = detector.detect_moved_blocks();
+    assert.strictEqual(detected_blocks.length, 1);
+    assert.strictEqual(detected_blocks[0].lines[0].removed_line.line_no, 1);
+    assert.strictEqual(detected_blocks[0].last_removed_line.line_no, 5);
+    assert.strictEqual(detected_blocks[0].lines[0].added_line.line_no, 12);
+    assert.strictEqual(detected_blocks[0].last_added_line.line_no, 16);
+    assert.strictEqual(detected_blocks[0].line_count, 5);
+    assert.strictEqual(detected_blocks[0].char_count, 4 * 43);
+  });
+
+  it('matching block should contain at least 2 not empty lines', function() {
+    let removed_lines = new ChangedLines("file_with_removed_lines", {
+      1: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      2: "   ",
+      3: "   ",
+    });
+
+    let added_lines = new ChangedLines("file_with_added_lines", {
+      12: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      13: "   ",
+      14: "   ",
+    });
+
+    let detector = new c.MovedBlocksDetector(removed_lines.to_array(), added_lines.to_array(), no_op);
+    let detected_blocks = detector.detect_moved_blocks();
+    assert.strictEqual(detected_blocks.length, 0);
   })
 
 });

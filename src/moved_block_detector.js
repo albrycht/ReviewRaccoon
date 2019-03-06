@@ -74,6 +74,10 @@ class Line {
         }
         throw "Invalid indentation type: " + indetation.indent_type;
     }
+
+    is_empty() {
+        return this.trim_text === ''
+    }
 }
 
 class MatchingLine {
@@ -93,6 +97,7 @@ class MatchingBlock {
         this.last_removed_line = removed_line;
         this.last_added_line = added_line;
         this.indentation = removed_line.calculate_indentation_change(added_line);
+        this.not_empty_lines = removed_line.is_empty() ? 0 : 1;
     }
 
     try_extend_with_line(removed_line, added_line){
@@ -104,13 +109,14 @@ class MatchingBlock {
             this.lines.push(new MatchingLine(removed_line, added_line));
             this.last_removed_line = removed_line;
             this.last_added_line = added_line;
+            this.not_empty_lines += removed_line.is_empty() ? 0 : 1;
             return true;
         }
         return false;
     }
 
     get line_count() {
-        return this.lines.length;
+        return this.not_empty_lines
     }
 
     get char_count() {
@@ -159,9 +165,14 @@ class MovedBlocksDetector {
         for (const removed_line of this.removed_lines) {
             let fuzzy_matching_pairs = this.added_lines_fuzzy_set.get(removed_line.trim_text, null, 0.5);
 
+            if (removed_line.trim_text === '') {
+                fuzzy_matching_pairs = [[1, '']];
+            }
+
             if (fuzzy_matching_pairs === null){
                 continue
             }
+
             for (const fuzz_pair of fuzzy_matching_pairs) {
                 let [match_probability, text] = fuzz_pair;
                 // console.log(`ORYG: ${removed_line.trim_text}\nCOPY: ${text}\nPROB: ${match_probability}\n`);
