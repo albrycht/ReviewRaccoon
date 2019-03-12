@@ -36,12 +36,23 @@ function getLine(item) {
     return new Line(file, line_no, text);
 }
 
+function correct_marker_heights(){
+    console.log("Correcting heights");
+    let markers = document.querySelectorAll(".detectedMovedBlock");
+
+    for (const block_marker of markers) {
+        let parent_height = block_marker.parentNode.clientHeight;
+        block_marker.style.height = parent_height + "px";
+    }
+    console.log("Done");
+}
+
 function markLine(line, line_in_block_index, detected_block_index, data_type, is_first_line, is_last_line, replace_html_content, alt_msg) {
     const button_selector_prefix = data_type === REMOVED_DATA_TYPE_ATTR ? REMOVED_LINES_SELECTOR : ADDED_LINES_SELECTOR;
     const add_comment_button_selector = button_selector_prefix +`[data-path="${line.file}"][data-line="${line.line_no}"][data-type="${data_type}"]`;
     let add_comment_button_elem = document.querySelector(add_comment_button_selector);
     let parent_node = add_comment_button_elem.parentNode;
-    let parent_height = parent_node.clientHeight;
+    //let parent_height = parent_node.clientHeight;
     let id_prefix = `detected-block-${detected_block_index}-${line_in_block_index}`;
     let oposite_data_type = data_type === REMOVED_DATA_TYPE_ATTR ? ADDED_DATA_TYPE_ATTR : REMOVED_DATA_TYPE_ATTR;
     let block_color = ALL_COLORS[detected_block_index % ALL_COLORS.length];
@@ -54,7 +65,8 @@ function markLine(line, line_in_block_index, detected_block_index, data_type, is
     block_marker.id = `${id_prefix}-${data_type}`;
     block_marker.href = `#${id_prefix}-${oposite_data_type}`;
     block_marker.className = "detectedMovedBlock";
-    block_marker.style.height = parent_height + "px";
+    //block_marker.style.height = parent_height + "px";
+    block_marker.style.height = "10px";
     block_marker.style.backgroundColor = block_color;
     block_marker.title = alt_msg;
     insertAfter(block_marker, add_comment_button_elem);
@@ -159,10 +171,10 @@ async function patch_diff_match_patch_lib(){
 }
 
 async function main(wait_for_page_load = true) {
-    console.log(`main`);
     await patch_diff_match_patch_lib();
     let url_regex = /\/files([^\/].*)?$|\/(commits\/([^\/].*)?)$/g;
     if (!window.location.href.match(url_regex)){
+        console.log("Wrong URL - skipping detection of moved blocks");
         return
     }
     clear_old_block_markers();
@@ -182,11 +194,13 @@ async function main(wait_for_page_load = true) {
 
         insertDetectedBlockCssClass();
     }
-
+    console.log("Highlighting blocks");
     for (const iter of detected_blocks.entries()) {
         let [block_index, detected_block] = iter;
         highlightDetectedBlock(block_index, detected_block);
     }
+    console.log("Done");
+    correct_marker_heights();
 }
 
 (function() {
