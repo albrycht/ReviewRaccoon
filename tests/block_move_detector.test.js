@@ -491,4 +491,47 @@ describe('MovedBlocksDetector', function() {
     assert.strictEqual(detected_blocks.length, 0);
   })
 
+  it('empty lines do not break matching block', function() {
+    let removed_lines = new ChangedLines("file_with_removed_lines", {
+      1: "    def _sort_services(services, order):",
+      2: "        assert order in (PARALLEL_START_ORDER, PARALLEL_STOP_ORDER), \\",
+      3: "            f\"Unknown operation order: {order}, only PARALLEL_START_ORDER and PARALLEL_STOP_ORDER are supported\"",
+      4: "",
+      5: "        priorities = {sname: priority for priority, sname in enumerate(ALL_SERVICE_NAMES)}",
+      6: "",
+      7: "        result = list(services)",
+      8: "        result.sort(key=priorities.get)",
+      9: "",
+      10: "        if order == PARALLEL_STOP_ORDER:",
+      11: "            result.reverse()",
+      12: "",
+      13: "        return result",
+    });
+
+    let added_lines = new ChangedLines("file_with_added_lines", {
+      11: "def sort_services(services, order):",
+      12: "    assert order in (PARALLEL_START_ORDER, PARALLEL_STOP_ORDER), \\",
+      13: "        f\"Unknown operation order: {order}, only PARALLEL_START_ORDER and PARALLEL_STOP_ORDER are supported\"",
+      14: "",
+      15: "    priorities = {sname: priority for priority, sname in enumerate(ALL_SERVICE_NAMES)}",
+      16: "",
+      17: "    result = list(services)",
+      18: "    result.sort(key=priorities.get)",
+      19: "",
+      20: "    if order == PARALLEL_STOP_ORDER:",
+      21: "        result.reverse()",
+      22: "",
+      23: "    return result",
+    });
+
+    let detector = new c.MovedBlocksDetector(removed_lines.to_array(), added_lines.to_array(), no_op);
+    let detected_blocks = detector.detect_moved_blocks();
+    assert.strictEqual(detected_blocks.length, 1);
+    assert.strictEqual(detected_blocks[0].lines[0].removed_line.line_no, 1);
+    assert.strictEqual(detected_blocks[0].last_removed_line.line_no, 13);
+    assert.strictEqual(detected_blocks[0].lines[0].added_line.line_no, 11);
+    assert.strictEqual(detected_blocks[0].last_added_line.line_no, 23);
+    assert.strictEqual(detected_blocks[0].lines.length, 13);
+  });
+
 });
