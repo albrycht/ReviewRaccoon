@@ -21,7 +21,7 @@ const ALL_COLORS = ['#058DC7', '#50B432', '#ED561B', '#DDDF00', '#24CBE5', '#64E
 function insertDetectedBlockCssClass(){
     const style = document.createElement('style');
     style.type = 'text/css';
-    style.innerHTML = '.detectedMovedBlock { display: block; width: 10px; float: right; position: relative; margin: 0px -10px 0px -20px;}';
+    style.innerHTML = '.detectedMovedBlock { display: block; width: 10px; float: right; position: relative; left: 10px;}';
     document.getElementsByTagName('head')[0].appendChild(style);
 }
 
@@ -36,7 +36,7 @@ function getLine(item) {
     return new Line(file, line_no, text);
 }
 
-function markLine(line, line_in_block_index, detected_block_index, data_type, is_first_line, is_last_line, replace_html_content) {
+function markLine(line, line_in_block_index, detected_block_index, data_type, is_first_line, is_last_line, replace_html_content, alt_msg) {
     const button_selector_prefix = data_type === REMOVED_DATA_TYPE_ATTR ? REMOVED_LINES_SELECTOR : ADDED_LINES_SELECTOR;
     const add_comment_button_selector = button_selector_prefix +`[data-path="${line.file}"][data-line="${line.line_no}"][data-type="${data_type}"]`;
     let add_comment_button_elem = document.querySelector(add_comment_button_selector);
@@ -56,6 +56,7 @@ function markLine(line, line_in_block_index, detected_block_index, data_type, is
     block_marker.className = "detectedMovedBlock";
     block_marker.style.height = parent_height + "px";
     block_marker.style.backgroundColor = block_color;
+    block_marker.title = alt_msg;
     insertAfter(block_marker, add_comment_button_elem);
 
     if (is_first_line) {
@@ -83,6 +84,7 @@ function highlightDetectedBlock(block_index, detected_block) {
         let [line_in_block_index, matching_lines] = iter;
         let removed_line = matching_lines.removed_line;
         let added_line = matching_lines.added_line;
+        let match_probability = matching_lines.match_probability;
         let dmp = new diff_match_patch();
         let diff = dmp.diff_main(removed_line.leading_whitespaces + removed_line.trim_text,
                                  added_line.leading_whitespaces + added_line.trim_text);
@@ -97,8 +99,9 @@ function highlightDetectedBlock(block_index, detected_block) {
         }
         let is_first_line = line_in_block_index === 0;
         let is_last_line = line_in_block_index === detected_block.lines.length - 1;
-        markLine(removed_line, line_in_block_index, block_index, REMOVED_DATA_TYPE_ATTR, is_first_line, is_last_line, removed_line_html);
-        markLine(added_line, line_in_block_index, block_index, ADDED_DATA_TYPE_ATTR, is_first_line, is_last_line, added_line_html)
+        let alt_msg = `Line match: ${match_probability}. Block match: ${detected_block.weighted_lines_count}`;
+        markLine(removed_line, line_in_block_index, block_index, REMOVED_DATA_TYPE_ATTR, is_first_line, is_last_line, removed_line_html, alt_msg);
+        markLine(added_line, line_in_block_index, block_index, ADDED_DATA_TYPE_ATTR, is_first_line, is_last_line, added_line_html, alt_msg)
     }
 }
 
