@@ -192,7 +192,7 @@ class MovedBlocksDetector {
                             currently_matching_blocks.splice(i, 1); // remove current element from list
                         }
                     }
-                    if (!line_extended_any_block) {
+                    if (!line_extended_any_block && removed_line.trim_text !== '') {
                         new_matching_blocks.push(new MatchingBlock(removed_line, added_line, match_probability))
                     }
                 }
