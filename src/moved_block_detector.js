@@ -81,9 +81,10 @@ class Line {
 }
 
 class MatchingLine {
-    constructor(removed_line, added_line) {
+    constructor(removed_line, added_line, match_probability) {
         this.added_line = added_line;
         this.removed_line = removed_line;
+        this.match_probability = match_probability;
     }
 
     can_be_extended_with_lines(removed_line, added_line) {
@@ -92,24 +93,27 @@ class MatchingLine {
 }
 
 class MatchingBlock {
-    constructor(removed_line, added_line) {
-        this.lines = [new MatchingLine(removed_line, added_line)];
+    constructor(removed_line, added_line, match_probability) {
+        this.lines = [new MatchingLine(removed_line, added_line, match_probability)];
         this.last_removed_line = removed_line;
         this.last_added_line = added_line;
         this.indentation = removed_line.calculate_indentation_change(added_line);
         this.not_empty_lines = removed_line.is_empty() ? 0 : 1;
+        this.weighted_lines_count = removed_line.is_empty() ? 0 : match_probability;
+
     }
 
-    try_extend_with_line(removed_line, added_line){
+    try_extend_with_line(removed_line, added_line, match_probability){
         if (!Line.lines_match_with_changed_indentation(removed_line, added_line, this.indentation)) {
             return false;
         }
         if (this.last_removed_line.is_line_before(removed_line)
             && this.last_added_line.is_line_before(added_line)) {
-            this.lines.push(new MatchingLine(removed_line, added_line));
+            this.lines.push(new MatchingLine(removed_line, added_line, match_probability));
             this.last_removed_line = removed_line;
             this.last_added_line = added_line;
             this.not_empty_lines += removed_line.is_empty() ? 0 : 1;
+            this.weighted_lines_count += removed_line.is_empty() ? 0 : match_probability;
             return true;
         }
         return false;
@@ -149,7 +153,7 @@ class MovedBlocksDetector {
     filter_blocks(matching_blocks) {
         let filtered_blocks = [];
         for (const matching_block of matching_blocks) {
-            if (matching_block.line_count >= 2 && matching_block.char_count >= 30) {
+            if (matching_block.weighted_lines_count >= 2 && matching_block.char_count >= 30) {
                 filtered_blocks.push(matching_block)
             }
         }
@@ -181,7 +185,7 @@ class MovedBlocksDetector {
                     let line_extended_any_block = false;
                     for (let i = currently_matching_blocks.length - 1; i >= 0; i--) { // iterate over list with removing from backward
                         let matching_block = currently_matching_blocks[i];
-                        extended = matching_block.try_extend_with_line(removed_line, added_line);
+                        extended = matching_block.try_extend_with_line(removed_line, added_line, match_probability);
                         if (extended) {
                             new_matching_blocks.push(matching_block);
                             line_extended_any_block = true;
@@ -189,7 +193,7 @@ class MovedBlocksDetector {
                         }
                     }
                     if (!line_extended_any_block) {
-                        new_matching_blocks.push(new MatchingBlock(removed_line, added_line))
+                        new_matching_blocks.push(new MatchingBlock(removed_line, added_line, match_probability))
                     }
                 }
             }
@@ -203,7 +207,10 @@ class MovedBlocksDetector {
         for (const matching_block of currently_matching_blocks) {
             detected_blocks.push(matching_block)
         }
-        return this.filter_blocks(detected_blocks);
+
+        let filtered_blocks = this.filter_blocks(detected_blocks);
+        console.log(`Detected ${filtered_blocks.length} blocks (${detected_blocks.length - filtered_blocks.length} filtered)`);
+        return filtered_blocks;
     }
 }
 
