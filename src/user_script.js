@@ -161,7 +161,7 @@ async function patch_diff_match_patch_lib(){
 async function main(wait_for_page_load = true) {
     console.log(`main`);
     await patch_diff_match_patch_lib();
-    let url_regex = /\/files(#.*)?$|\/(commits\/\w+)$/g;
+    let url_regex = /\/files([^\/].*)?$|\/(commits\/([^\/].*)?)$/g;
     if (!window.location.href.match(url_regex)){
         return
     }
@@ -171,6 +171,7 @@ async function main(wait_for_page_load = true) {
         await sleep(1500);
     }
     await expand_large_diffs();
+    console.log("Starting detection");
     const added_lines_elems = document.querySelectorAll(ADDED_LINES_SELECTOR);
     const removed_lines_elems = document.querySelectorAll(REMOVED_LINES_SELECTOR);
 
