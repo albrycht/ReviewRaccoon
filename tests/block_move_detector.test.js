@@ -534,4 +534,64 @@ describe('MovedBlocksDetector', function() {
     assert.strictEqual(detected_blocks[0].lines.length, 13);
   });
 
+  it('adding empty lines do not break matching block', function() {
+    let removed_lines = new ChangedLines("file_with_removed_lines", {
+      1: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      2: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+      3: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
+      4: "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+      5: "5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5"
+    });
+
+    let added_lines = new ChangedLines("file_with_added_lines", {
+      11: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      12: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+      13: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
+      14: "   ",
+      15: "",
+      16: "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+      17: "5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5",
+    });
+
+    let detector = new c.MovedBlocksDetector(removed_lines.to_array(), added_lines.to_array(), no_op);
+    let detected_blocks = detector.detect_moved_blocks();
+    assert.strictEqual(detected_blocks.length, 1);
+    assert.strictEqual(detected_blocks[0].lines[0].removed_line.line_no, 1);
+    assert.strictEqual(detected_blocks[0].last_removed_line.line_no, 5);
+    assert.strictEqual(detected_blocks[0].lines[0].added_line.line_no, 11);
+    assert.strictEqual(detected_blocks[0].last_added_line.line_no, 17);
+    assert.strictEqual(detected_blocks[0].lines.length, 7);
+    assert.strictEqual(detected_blocks[0].line_count, 5);
+  });
+
+  it('removing empty lines do not break matching block', function() {
+    let removed_lines = new ChangedLines("file_with_removed_lines", {
+      1: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      2: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+      3: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
+      4: "   ",
+      5: "",
+      6: "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+      7: "5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5"
+    });
+
+    let added_lines = new ChangedLines("file_with_added_lines", {
+      11: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      12: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+      13: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
+      14: "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+      15: "5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5",
+    });
+
+    let detector = new c.MovedBlocksDetector(removed_lines.to_array(), added_lines.to_array(), no_op);
+    let detected_blocks = detector.detect_moved_blocks();
+    assert.strictEqual(detected_blocks.length, 1);
+    assert.strictEqual(detected_blocks[0].lines[0].removed_line.line_no, 1);
+    assert.strictEqual(detected_blocks[0].last_removed_line.line_no, 7);
+    assert.strictEqual(detected_blocks[0].lines[0].added_line.line_no, 11);
+    assert.strictEqual(detected_blocks[0].last_added_line.line_no, 15);
+    assert.strictEqual(detected_blocks[0].lines.length, 7);
+    assert.strictEqual(detected_blocks[0].line_count, 5);
+  });
+
 });

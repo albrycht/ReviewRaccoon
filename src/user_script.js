@@ -177,7 +177,7 @@ async function main(wait_for_page_load = true) {
         console.log("Wrong URL - skipping detection of moved blocks");
         return
     }
-    clear_old_block_markers();
+    await clear_old_block_markers();
     add_detect_moved_blocks_button();
     if (wait_for_page_load) {
         await sleep(1500);
@@ -189,9 +189,7 @@ async function main(wait_for_page_load = true) {
 
     let detector = new MovedBlocksDetector(Array.from(removed_lines_elems), Array.from(added_lines_elems), getLine);
     let detected_blocks = detector.detect_moved_blocks();
-    console.log(`Detected ${detected_blocks.length} blocks`);
     if (detected_blocks) {
-
         insertDetectedBlockCssClass();
     }
     console.log("Highlighting blocks");
@@ -199,8 +197,8 @@ async function main(wait_for_page_load = true) {
         let [block_index, detected_block] = iter;
         highlightDetectedBlock(block_index, detected_block);
     }
-    console.log("Done");
     correct_marker_heights();
+    console.log("Done");
 }
 
 (function() {

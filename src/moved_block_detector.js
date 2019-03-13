@@ -81,6 +81,10 @@ class Line {
     is_empty() {
         return this.trim_text === ''
     }
+
+    toString(){
+        return `${this.leading_whitespaces}${this.trim_text}`
+    }
 }
 
 class MatchingLine {
@@ -88,10 +92,6 @@ class MatchingLine {
         this.added_line = added_line;
         this.removed_line = removed_line;
         this.match_probability = match_probability;
-    }
-
-    can_be_extended_with_lines(removed_line, added_line) {
-        return this.removed_line.is_line_before(removed_line) && this.added_line.is_line_before(added_line)
     }
 }
 
@@ -122,6 +122,16 @@ class MatchingBlock {
         return false;
     }
 
+    extend_with_empty_added_line(next_added_line){
+        this.lines.push(new MatchingLine(null, next_added_line, 0));
+        this.last_added_line = next_added_line;
+    }
+
+    extend_with_empty_removed_line(next_removed_line){
+        this.lines.push(new MatchingLine(next_removed_line, null, 0));
+        this.last_removed_line = next_removed_line;
+    }
+
     get line_count() {
         return this.not_empty_lines
     }
@@ -129,8 +139,9 @@ class MatchingBlock {
     get char_count() {
         let sum = 0;
         for (let matching_line of this.lines) {
-            sum += Math.max(matching_line.added_line.trim_text.length,
-                            matching_line.removed_line.trim_text.length);
+            let added_length = matching_line.added_line ? matching_line.added_line.trim_text.length : 0;
+            let removed_length = matching_line.removed_line ? matching_line.removed_line.trim_text.length : 0;
+            sum += Math.max(added_length, removed_length);
         }
         return sum;
     }
@@ -141,15 +152,19 @@ class MovedBlocksDetector {
         this.removed_lines = [];
         this.trim_hash_to_array_of_added_lines = new DefaultDict(Array);
         this.trim_text_to_array_of_added_lines = new DefaultDict(Array);
+        this.added_file_name_to_line_no_to_line = new DefaultDict(Object);
+        this.removed_file_name_to_line_no_to_line = new DefaultDict(Object);
         this.added_lines_fuzzy_set = FuzzySet();
 
         for (let line of Array.from(added_lines_raw).map(raw_line_to_obj_func)) {
             this.trim_hash_to_array_of_added_lines[line.trim_hash].push(line);
             this.trim_text_to_array_of_added_lines[line.trim_text].push(line);
             this.added_lines_fuzzy_set.add(line.trim_text);
+            this.added_file_name_to_line_no_to_line[line.file][line.line_no] = line;
         }
         for (let line of Array.from(removed_lines_raw).map(raw_line_to_obj_func)) {
             this.removed_lines.push(line);
+            this.removed_file_name_to_line_no_to_line[line.file][line.line_no] = line;
         }
     }
 
@@ -163,6 +178,46 @@ class MovedBlocksDetector {
         return filtered_blocks;
     }
 
+    extend_matching_blocks_with_empty_added_lines_if_possible(currently_matching_blocks){
+        for (const matching_block of currently_matching_blocks) {
+            while (true) {
+                let last_line = matching_block.last_added_line;
+                let next_added_line = this.added_file_name_to_line_no_to_line[last_line.file][last_line.line_no + 1];
+                if (next_added_line && next_added_line.trim_text === '') {
+                    matching_block.extend_with_empty_added_line(next_added_line);
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
+    extend_matching_blocks_with_empty_removed_lines_if_possible(currently_matching_blocks){
+        let extended_blocks = [];
+        for (let i = currently_matching_blocks.length - 1; i >= 0; i--) { // iterate over list with removing from backward
+            let matching_block = currently_matching_blocks[i];
+            let block_extended = false;
+            while (true) {
+                let last_line = matching_block.last_removed_line;
+                console.log(`Looking at line: ${last_line}`);
+                let next_removed_line = this.removed_file_name_to_line_no_to_line[last_line.file][last_line.line_no + 1];
+                console.log(`Next removed line: ${next_removed_line}`);
+                if (next_removed_line && next_removed_line.trim_text === '') {
+                    matching_block.extend_with_empty_removed_line(next_removed_line);
+                    block_extended = true;
+                    console.log(`   Extending`);
+                } else {
+                    if (block_extended) {
+                        currently_matching_blocks.splice(i, 1); // remove current element from list
+                        extended_blocks.push(matching_block);
+                    }
+                    break;
+                }
+            }
+        }
+        return extended_blocks;
+    }
+
     detect_moved_blocks() {
         let detected_blocks = [];
         let currently_matching_blocks = [];
@@ -171,9 +226,12 @@ class MovedBlocksDetector {
 
         for (const removed_line of this.removed_lines) {
             let fuzzy_matching_pairs = this.added_lines_fuzzy_set.get(removed_line.trim_text, null, 0.5);
-
+            console.log(`Considering line: ${removed_line}`);
             if (removed_line.trim_text === '') {
                 fuzzy_matching_pairs = [[1, '']];
+            } else {
+                // iterate over currently_matching_blocks and try to extend them with empty lines
+                this.extend_matching_blocks_with_empty_added_lines_if_possible(currently_matching_blocks)
             }
 
             if (fuzzy_matching_pairs === null){
@@ -198,6 +256,10 @@ class MovedBlocksDetector {
                         new_matching_blocks.push(new MatchingBlock(removed_line, added_line, match_probability))
                     }
                 }
+            }
+            if (removed_line.trim_text === '') {
+                let extended_blocks = this.extend_matching_blocks_with_empty_removed_lines_if_possible(currently_matching_blocks);
+                detected_blocks.push(...extended_blocks);
             }
 
             for (const matching_block of currently_matching_blocks) {
