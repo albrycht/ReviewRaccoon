@@ -197,22 +197,13 @@ class MovedBlocksDetector {
         for (let i = currently_matching_blocks.length - 1; i >= 0; i--) { // iterate over list with removing from backward
             let matching_block = currently_matching_blocks[i];
             let block_extended = false;
-            while (true) {
-                let last_line = matching_block.last_removed_line;
-                console.log(`Looking at line: ${last_line}`);
-                let next_removed_line = this.removed_file_name_to_line_no_to_line[last_line.file][last_line.line_no + 1];
-                console.log(`Next removed line: ${next_removed_line}`);
-                if (next_removed_line && next_removed_line.trim_text === '') {
-                    matching_block.extend_with_empty_removed_line(next_removed_line);
-                    block_extended = true;
-                    console.log(`   Extending`);
-                } else {
-                    if (block_extended) {
-                        currently_matching_blocks.splice(i, 1); // remove current element from list
-                        extended_blocks.push(matching_block);
-                    }
-                    break;
-                }
+            let last_line = matching_block.last_removed_line;
+            let next_removed_line = this.removed_file_name_to_line_no_to_line[last_line.file][last_line.line_no + 1];
+            if (next_removed_line && next_removed_line.trim_text === '') {
+                matching_block.extend_with_empty_removed_line(next_removed_line);
+                block_extended = true;
+                currently_matching_blocks.splice(i, 1); // remove current element from list
+                extended_blocks.push(matching_block);
             }
         }
         return extended_blocks;
@@ -226,7 +217,6 @@ class MovedBlocksDetector {
 
         for (const removed_line of this.removed_lines) {
             let fuzzy_matching_pairs = this.added_lines_fuzzy_set.get(removed_line.trim_text, null, 0.5);
-            console.log(`Considering line: ${removed_line}`);
             if (removed_line.trim_text === '') {
                 fuzzy_matching_pairs = [[1, '']];
             } else {
@@ -259,7 +249,7 @@ class MovedBlocksDetector {
             }
             if (removed_line.trim_text === '') {
                 let extended_blocks = this.extend_matching_blocks_with_empty_removed_lines_if_possible(currently_matching_blocks);
-                detected_blocks.push(...extended_blocks);
+                new_matching_blocks.push(...extended_blocks);
             }
 
             for (const matching_block of currently_matching_blocks) {

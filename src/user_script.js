@@ -98,8 +98,9 @@ function highlightDetectedBlock(block_index, detected_block) {
         let added_line = matching_lines.added_line;
         let match_probability = matching_lines.match_probability;
         let dmp = new diff_match_patch();
-        let diff = dmp.diff_main(removed_line.leading_whitespaces + removed_line.trim_text,
-                                 added_line.leading_whitespaces + added_line.trim_text);
+        let added_text = added_line ? added_line.leading_whitespaces + added_line.trim_text : '';
+        let removed_text = removed_line ? removed_line.leading_whitespaces + removed_line.trim_text : '';
+        let diff = dmp.diff_main(removed_text, added_text);
         dmp.diff_cleanupSemantic(diff);
         let removed_line_html = '';
         let added_line_html = '';
@@ -112,8 +113,12 @@ function highlightDetectedBlock(block_index, detected_block) {
         let is_first_line = line_in_block_index === 0;
         let is_last_line = line_in_block_index === detected_block.lines.length - 1;
         let alt_msg = `Line match: ${match_probability}. Block match: ${detected_block.weighted_lines_count}`;
-        markLine(removed_line, line_in_block_index, block_index, REMOVED_DATA_TYPE_ATTR, is_first_line, is_last_line, removed_line_html, alt_msg);
-        markLine(added_line, line_in_block_index, block_index, ADDED_DATA_TYPE_ATTR, is_first_line, is_last_line, added_line_html, alt_msg)
+        if (removed_line) {
+            markLine(removed_line, line_in_block_index, block_index, REMOVED_DATA_TYPE_ATTR, is_first_line, is_last_line, removed_line_html, alt_msg);
+        }
+        if (added_line) {
+            markLine(added_line, line_in_block_index, block_index, ADDED_DATA_TYPE_ATTR, is_first_line, is_last_line, added_line_html, alt_msg)
+        }
     }
 }
 

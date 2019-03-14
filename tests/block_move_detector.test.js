@@ -356,17 +356,19 @@ describe('MovedBlocksDetector', function() {
     let removed_lines = new ChangedLines("file_with_removed_lines", {
       1: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
       2: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+      3: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
     });
 
     let added_lines = new ChangedLines("file_with_added_lines", {
       11: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1--",
       12: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2--",
+      13: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3--",
     });
 
     let detector = new c.MovedBlocksDetector(removed_lines.to_array(), added_lines.to_array(), no_op);
     let detected_blocks = detector.detect_moved_blocks();
     assert.strictEqual(detected_blocks.length, 1);
-    assert.strictEqual(detected_blocks[0].line_count, 2);
+    assert.strictEqual(detected_blocks[0].line_count, 3);
   });
 
   it('check Starfish ansible code moved', function() {
@@ -421,7 +423,7 @@ describe('MovedBlocksDetector', function() {
 
     let detector = new c.MovedBlocksDetector(removed_lines.to_array(), added_lines.to_array(), no_op);
     let detected_blocks = detector.detect_moved_blocks();
-    assert.strictEqual(detected_blocks.length, 2); //TODO matching empty line between blocks - this should be one block!
+    assert.strictEqual(detected_blocks.length, 1);
 
     for (let detected_block of detected_blocks) {
       let line0 = detected_block.lines[0];
@@ -429,16 +431,10 @@ describe('MovedBlocksDetector', function() {
                   `Added: ${line0.added_line.line_no}-${detected_block.last_added_line.line_no}`);
     }
     assert.strictEqual(detected_blocks[0].lines[0].removed_line.line_no, 4);
-    assert.strictEqual(detected_blocks[0].last_removed_line.line_no, 13);
+    assert.strictEqual(detected_blocks[0].last_removed_line.line_no, 19);
     assert.strictEqual(detected_blocks[0].lines[0].added_line.line_no, 17);
-    assert.strictEqual(detected_blocks[0].last_added_line.line_no, 26);
-    assert.strictEqual(detected_blocks[0].line_count, 10);
-
-    assert.strictEqual(detected_blocks[1].lines[0].removed_line.line_no, 15);
-    assert.strictEqual(detected_blocks[1].last_removed_line.line_no, 19);
-    assert.strictEqual(detected_blocks[1].lines[0].added_line.line_no, 28);
-    assert.strictEqual(detected_blocks[1].last_added_line.line_no, 32);
-    assert.strictEqual(detected_blocks[1].line_count, 5);
+    assert.strictEqual(detected_blocks[0].last_added_line.line_no, 32);
+    assert.strictEqual(detected_blocks[0].line_count, 15);
   });
 
   it('whitespace line do not break matching block', function() {
@@ -469,7 +465,7 @@ describe('MovedBlocksDetector', function() {
     assert.strictEqual(detected_blocks[0].last_removed_line.line_no, 5);
     assert.strictEqual(detected_blocks[0].lines[0].added_line.line_no, 12);
     assert.strictEqual(detected_blocks[0].last_added_line.line_no, 16);
-    assert.strictEqual(detected_blocks[0].line_count, 5);
+    assert.strictEqual(detected_blocks[0].line_count, 4);
     assert.strictEqual(detected_blocks[0].char_count, 4 * 43);
   });
 
