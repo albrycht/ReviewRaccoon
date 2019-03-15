@@ -132,6 +132,35 @@ class MatchingBlock {
         this.last_removed_line = next_removed_line;
     }
 
+    clear_empty_lines_at_end(){
+        let last_index = null;
+        for (let i = this.lines.length - 1; i >= 0; i--) {
+            let matching_lines = this.lines[i];
+            if ((!matching_lines.removed_line || matching_lines.removed_line.trim_text === '')
+                && (!matching_lines.added_line || matching_lines.added_line.trim_text === '')) {
+                this.lines.splice(i, 1);
+                this.last_removed_line = null;
+                this.last_added_line = null;
+            } else {
+                last_index = i;
+                break
+            }
+        }
+
+        for (let i = last_index; i >= 0; i--) {
+            if (this.last_added_line !== null && this.last_removed_line !== null) {
+                break
+            }
+            let matching_lines = this.lines[i];
+            if (matching_lines.removed_line !== null && this.last_removed_line === null) {
+                this.last_removed_line = matching_lines.removed_line;
+            }
+            if (matching_lines.added_line !== null && this.last_added_line === null) {
+                this.last_added_line = matching_lines.added_line;
+            }
+        }
+    }
+
     get line_count() {
         return this.not_empty_lines
     }
@@ -172,6 +201,7 @@ class MovedBlocksDetector {
         let filtered_blocks = [];
         for (const matching_block of matching_blocks) {
             if (matching_block.weighted_lines_count >= 2 && matching_block.char_count >= 30) {
+                matching_block.clear_empty_lines_at_end();
                 filtered_blocks.push(matching_block)
             }
         }
