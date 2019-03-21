@@ -174,6 +174,15 @@ class MatchingBlock {
         }
         return sum;
     }
+
+    toString(){
+        return `Block(\n
+           removed_file: ${this.last_removed_line.file}
+           added_file: ${this.last_added_line.file}
+           removed_lines: ${this.lines[0].removed_line.line_no}-${this.last_removed_line.line_no}
+           added_lines: ${this.lines[0].added_line.line_no}-${this.last_added_line.line_no}
+           );\n`
+    }
 }
 
 class MovedBlocksDetector {
@@ -197,6 +206,74 @@ class MovedBlocksDetector {
         }
     }
 
+    filter_out_block_inside_other_blocks(filtered_blocks){
+         // sort by 3 fields:  start line_no ASC, end line_no DESC, weighted_lines_count DESC
+        filtered_blocks.sort(function (a, b) {
+            let a_file = a.last_removed_line.file;
+            let b_file = b.last_removed_line.file;
+            if (a_file !== b_file) {
+                return a_file < b_file ? -1 : 1
+            }
+            return a.lines[0].removed_line.line_no - b.lines[0].removed_line.line_no  // start line ASCENDING
+                || b.last_removed_line.line_no - a.last_removed_line.line_no  // end line DESCENDING
+                || b.weighted_lines_count - a.weighted_lines_count;  // weighted_lines_count DESCENDING
+        });
+
+        let last_matching_block = null;
+        for (const matching_block of filtered_blocks) {
+            if (last_matching_block === null) {
+                last_matching_block = matching_block;
+                continue
+            }
+            if (matching_block.last_removed_line.file === last_matching_block.last_removed_line.file
+                && matching_block.lines[0].removed_line.line_no >= last_matching_block.lines[0].removed_line.line_no
+                && matching_block.last_removed_line.line_no <= last_matching_block.last_removed_line.line_no
+                ) {
+                    if (matching_block.weighted_lines_count < last_matching_block.weighted_lines_count) {
+                        matching_block.remove_part_is_inside_larger_block = true;
+                    }
+            } else {
+                last_matching_block = matching_block;
+            }
+        }
+
+        // sort by 3 fields:  start line_no ASC, end line_no DESC, weighted_lines_count DESC
+        filtered_blocks.sort(function (a, b) {
+            let a_file = a.last_added_line.file;
+            let b_file = b.last_added_line.file;
+            if (a_file !== b_file) {
+                return a_file < b_file ? -1 : 1
+            }
+            return a.lines[0].added_line.line_no - b.lines[0].added_line.line_no  // start line ASCENDING
+                || b.last_added_line.line_no - a.last_added_line.line_no  // end line DESCENDING
+                || b.weighted_lines_count - a.weighted_lines_count;  // weighted_lines_count DESCENDING
+        });
+
+        let ok_blocks = [];
+        last_matching_block = null;
+        for (const matching_block of filtered_blocks) {
+            if (last_matching_block === null) {
+                last_matching_block = matching_block;
+                ok_blocks.push(matching_block);
+                continue
+            }
+            if (matching_block.last_added_line.file === last_matching_block.last_added_line.file
+                && matching_block.lines[0].added_line.line_no >= last_matching_block.lines[0].added_line.line_no
+                && matching_block.last_added_line.line_no <= last_matching_block.last_added_line.line_no
+                ) {
+                    if (matching_block.remove_part_is_inside_larger_block) {
+                         //pass
+                    } else {
+                        ok_blocks.push(matching_block)
+                    }
+            } else {
+                last_matching_block = matching_block;
+                ok_blocks.push(matching_block)
+            }
+        }
+        return ok_blocks;
+    }
+
     filter_blocks(matching_blocks) {
         let filtered_blocks = [];
         for (const matching_block of matching_blocks) {
@@ -205,7 +282,8 @@ class MovedBlocksDetector {
                 filtered_blocks.push(matching_block)
             }
         }
-        return filtered_blocks;
+
+        return this.filter_out_block_inside_other_blocks(filtered_blocks);
     }
 
     extend_matching_blocks_with_empty_added_lines_if_possible(currently_matching_blocks){
@@ -294,6 +372,7 @@ class MovedBlocksDetector {
 
         let filtered_blocks = this.filter_blocks(detected_blocks);
         console.log(`Detected ${filtered_blocks.length} blocks (${detected_blocks.length - filtered_blocks.length} filtered)`);
+        // console.log(`Blocks: ${filtered_blocks}`);
         return filtered_blocks;
     }
 }

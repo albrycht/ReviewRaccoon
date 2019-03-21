@@ -621,4 +621,96 @@ describe('MovedBlocksDetector', function() {
     assert.strictEqual(detected_blocks[0].line_count, 5);
   });
 
+  it('do not detect blocks that are inside other larger blocks', function() {
+    let removed_lines = new ChangedLines("file_with_removed_lines", {
+      1: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      2: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+      3: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
+      4: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      5: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+      6: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
+      7: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      8: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+      9: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
+    });
+
+    let added_lines = new ChangedLines("file_with_added_lines", {
+      11: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      12: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+      13: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
+      14: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      15: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+      16: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
+      17: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+      18: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+      19: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
+    });
+
+    let detector = new c.MovedBlocksDetector(removed_lines.to_array(), added_lines.to_array(), no_op);
+    let detected_blocks = detector.detect_moved_blocks();
+    assert.strictEqual(detected_blocks.length, 1);
+    assert.strictEqual(detected_blocks[0].lines[0].removed_line.line_no, 1);
+    assert.strictEqual(detected_blocks[0].last_removed_line.line_no, 9);
+    assert.strictEqual(detected_blocks[0].lines[0].added_line.line_no, 11);
+    assert.strictEqual(detected_blocks[0].last_added_line.line_no, 19);
+    assert.strictEqual(detected_blocks[0].lines.length, 9);
+    assert.strictEqual(detected_blocks[0].line_count, 9);
+  });
+
+  it('do not detect blocks that are inside other larger blocks VER 2', function() {
+    let removed_lines = new ChangedLines("file_with_removed_lines", {
+      11: "        })",
+      12: "        api_factory = self.installation.api_factory",
+      13: "        config_obj = self.installation.get_config_obj()",
+      14: "",
+      15: "        for service_name, default_port, api_cls in self.services_info:",
+      16: "            service_url = get_service_url(config_obj, default_port, service_name)",
+      17: "            service_url = replace_in_service_url(service_url, host=host_ip)",
+      18: "            service_api = api_factory._create_api(api_cls, service_url)",
+      19: "            service_status = service_api.check_status()",
+      20: "            self.assertEqual(service_status.status['status'], 'UP')",
+      21: "",
+      22: "        for service_name, default_port, api_cls in self.services_info:",
+      23: "            service_url = get_service_url(config_obj, default_port, service_name)",
+      24: "            service_url = replace_in_service_url(service_url, host='localhost')",
+      25: "            service_api = api_factory._create_api(api_cls, service_url)",
+      26: "            service_status = service_api.check_status()",
+      27: "            self.assertEqual(service_status.status['status'], 'UP')",
+      28: "",
+      29: "        # Stop system without simulation to avoid potential problems in next running test.",
+      30: "        self._stop_system(allow_simulate=False)",
+    });
+
+    let added_lines = new ChangedLines("file_with_added_lines", {
+      51: "            'agent.initial_scan': False",
+      52: "        }):",
+      53: "",
+      54: "            api_factory = self.installation.api_factory",
+      55: "            config_obj = self.installation.get_config_obj()",
+      56: "",
+      57: "            for service_name, default_port, api_cls in self.services_info:",
+      58: "                service_url = get_service_url(config_obj, default_port, service_name)",
+      59: "                service_url = replace_in_service_url(service_url, host=host_ip)",
+      60: "                service_api = api_factory._create_api(api_cls, service_url)",
+      61: "                service_status = service_api.check_status()",
+      62: "                self.assertEqual(service_status.status['status'], 'UP')",
+      63: "",
+      64: "            for service_name, default_port, api_cls in self.services_info:",
+      65: "                service_url = get_service_url(config_obj, default_port, service_name)",
+      66: "                service_url = replace_in_service_url(service_url, host='localhost')",
+      67: "                service_api = api_factory._create_api(api_cls, service_url)",
+      68: "                service_status = service_api.check_status()",
+      69: "                self.assertEqual(service_status.status['status'], 'UP')",
+    });
+
+    let detector = new c.MovedBlocksDetector(removed_lines.to_array(), added_lines.to_array(), no_op);
+    let detected_blocks = detector.detect_moved_blocks();
+    assert.strictEqual(detected_blocks.length, 1);
+    assert.strictEqual(detected_blocks[0].lines[0].removed_line.line_no, 12);
+    assert.strictEqual(detected_blocks[0].last_removed_line.line_no, 27);
+    assert.strictEqual(detected_blocks[0].lines[0].added_line.line_no, 54);
+    assert.strictEqual(detected_blocks[0].last_added_line.line_no, 69);
+    assert.strictEqual(detected_blocks[0].lines.length, 16);
+    assert.strictEqual(detected_blocks[0].line_count, 14);
+  });
 });
