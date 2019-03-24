@@ -31,7 +31,7 @@ function insertAfter(newNode, referenceNode) {
 
 function getLine(item) {
     const file = item.getAttribute("data-path");
-    const text = item.getAttribute("data-original-line").substring(1); //substring(1) to removed leading - or +
+    const text = item.getAttribute("data-original-line").substring(1); //substring(1) to remove leading - or +
     const line_no = parseInt(item.getAttribute("data-line"), 10);
     return new Line(file, line_no, text);
 }
@@ -52,7 +52,6 @@ function markLine(line, line_in_block_index, detected_block_index, data_type, is
     const add_comment_button_selector = button_selector_prefix +`[data-path="${line.file}"][data-line="${line.line_no}"][data-type="${data_type}"]`;
     let add_comment_button_elem = document.querySelector(add_comment_button_selector);
     let parent_node = add_comment_button_elem.parentNode;
-    //let parent_height = parent_node.clientHeight;
     let id_prefix = `detected-block-${detected_block_index}-${line_in_block_index}`;
     let oposite_data_type = data_type === REMOVED_DATA_TYPE_ATTR ? ADDED_DATA_TYPE_ATTR : REMOVED_DATA_TYPE_ATTR;
     let block_color = ALL_COLORS[detected_block_index % ALL_COLORS.length];
@@ -63,12 +62,12 @@ function markLine(line, line_in_block_index, detected_block_index, data_type, is
     const block_marker = document.createElement('a');
     block_marker.innerHTML = ' ';
     block_marker.id = `${id_prefix}-${data_type}`;
-    block_marker.href = `#${id_prefix}-${oposite_data_type}`;
     block_marker.className = "detectedMovedBlock";
-    //block_marker.style.height = parent_height + "px";
     block_marker.style.height = "10px";
     block_marker.style.backgroundColor = block_color;
+    block_marker.style.cursor = "pointer";
     block_marker.title = alt_msg;
+    block_marker.onclick = function() {document.querySelector(`#${id_prefix}-${oposite_data_type}`).scrollIntoView(true); window.scrollBy(0, -103)};
     insertAfter(block_marker, add_comment_button_elem);
 
     if (is_first_line) {
