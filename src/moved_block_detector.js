@@ -274,10 +274,10 @@ class MovedBlocksDetector {
         return ok_blocks;
     }
 
-    filter_blocks(matching_blocks) {
+    filter_blocks(matching_blocks, min_lines_count) {
         let filtered_blocks = [];
         for (const matching_block of matching_blocks) {
-            if (matching_block.weighted_lines_count >= 2 && matching_block.char_count >= 30) {
+            if (matching_block.weighted_lines_count >= min_lines_count && matching_block.char_count >= 30) {
                 matching_block.clear_empty_lines_at_end();
                 filtered_blocks.push(matching_block)
             }
@@ -317,7 +317,7 @@ class MovedBlocksDetector {
         return extended_blocks;
     }
 
-    detect_moved_blocks() {
+    detect_moved_blocks(min_lines_count=2) {
         let detected_blocks = [];
         let currently_matching_blocks = [];
         let new_matching_blocks = [];
@@ -370,7 +370,7 @@ class MovedBlocksDetector {
             detected_blocks.push(matching_block)
         }
 
-        let filtered_blocks = this.filter_blocks(detected_blocks);
+        let filtered_blocks = this.filter_blocks(detected_blocks, min_lines_count);
         console.log(`Detected ${filtered_blocks.length} blocks (${detected_blocks.length - filtered_blocks.length} filtered)`);
         // console.log(`Blocks: ${filtered_blocks}`);
         return filtered_blocks;

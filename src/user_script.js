@@ -121,22 +121,83 @@ function highlightDetectedBlock(block_index, detected_block) {
     }
 }
 
+function htmlToElement(html) {
+    var template = document.createElement('template');
+    html = html.trim(); // Never return a text node of whitespace as the result
+    template.innerHTML = html;
+    return template.content.firstChild;
+}
+
 function add_detect_moved_blocks_button() {
     let button_container = document.querySelector(".pr-review-tools");
     let existing_button = document.querySelector("#detect_moved_blocks");
     if (existing_button !== null) {
         return
     }
+
+    let loading_animation = htmlToElement(
+    `<div id="detected_moves_loading_animation" style="display: inline-block;">` +
+    `<svg version="1.1" id="L4" x="0px" y="0px" viewBox="0 0 100 100" enable-background="new 0 0 0 0" ` +
+    `    style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" ` +
+    `>` +
+    `  <circle fill="#000" stroke="none" cx="6" cy="50" r="8">` +
+    `    <animate attributeName="opacity" dur="1s" values="0;1;0" repeatCount="indefinite" begin="0.1"></animate>` +
+    `  </circle>` +
+    `  <circle fill="#000" stroke="none" cx="36" cy="50" r="8">` +
+    `    <animate attributeName="opacity" dur="1s" values="0;1;0" repeatCount="indefinite" begin="0.2"></animate>` +
+    `  </circle>` +
+    `  <circle fill="#000" stroke="none" cx="66" cy="50" r="8">` +
+    `    <animate attributeName="opacity" dur="1s" values="0;1;0" repeatCount="indefinite" begin="0.3"></animate>` +
+    `  </circle>` +
+    `</svg></div>`);
     let details = document.createElement("details");
     details.className = "diffbar-item details-reset details-overlay position-relative text-center";
 
-    let summary = document.createElement("summary");
-    summary.className = "btn btn-sm";
-    summary.textContent = "Detect moved blocks";
-    summary.id = "detect_moved_blocks";
-    details.appendChild(summary);
+    let carret = document.createElement("div");
+    carret.className = "dropdown-caret";
 
-    details.addEventListener('click', function() {main(false);}, false);
+
+    let summary = document.createElement("summary");
+
+    summary.className = "btn btn-sm";
+    summary.id = "detect_moved_blocks";
+    summary.appendChild(loading_animation);
+    summary.appendChild(htmlToElement('<span class="Counter" style="display: none; margin-right: 4px;" id="detected_moves_counter"></span>'))
+    summary.appendChild(htmlToElement('<span style="margin-right: 4px;">Detect moved blocks</span>'))
+    summary.appendChild(carret);
+    details.appendChild(summary);
+    let min_lines_count = localStorage.getItem('detect-moved-blocks__min-lines-count');
+    if (min_lines_count > 0) {
+        // do nothing
+    } else {
+        min_lines_count = 2;
+    }
+
+    let popover = document.createElement("div");
+    popover.className = "Popover js-diff-settings mt-2 pt-1";
+    popover.style.left = "-62px";
+    popover.innerHTML = `` +
+        `<div class="Popover-message text-left p-3 mx-auto Box box-shadow-large col-6">\n` +
+        `    <form action="/StarfishStorage/starfish/pull/5360/files" accept-charset="UTF-8" method="get">\n` +
+        `        <h4 class="mb-2">Detection settings</h4>\n` +
+        `        <label for="min-lines-count" class="text-normal" style="float: left; line-height: 25px;">Min lines in block</label>\n` +
+        `        <input type="number" name="min-lines-count" value="${min_lines_count}" id="min-lines-count" style="width: 30px; text-align: right; float: right;">\n` +
+        `        <button class="btn btn-primary btn-sm col-12 mt-3" type="submit" id="detect-button">Apply and reload</button>\n` +
+        `    </form>\n` +
+        `</div>`;
+    details.appendChild(popover);
+    let detect_button = details.querySelector("#detect-button");
+
+    detect_button.addEventListener('click', function() {
+
+        let min_lines_count = parseFloat(document.querySelector("#min-lines-count").value);
+        console.log(`Starting detection: >${min_lines_count}<`);
+        if (min_lines_count > 0) {
+            // do nothing
+            localStorage.setItem('detect-moved-blocks__min-lines-count', min_lines_count);
+        }
+        // page will be reloaded
+    }, false);
 
     button_container.appendChild(details);
 }
@@ -153,7 +214,7 @@ async function expand_large_diffs(){
     }
     if (load_diff_buttons.length > 0) {
         console.log(`Expanded ${load_diff_buttons.length} large diffs`);
-        await sleep(2000);
+        await sleep(3000);
     }
 }
 
@@ -184,19 +245,33 @@ async function main(wait_for_page_load = true) {
     await clear_old_block_markers();
     add_detect_moved_blocks_button();
     if (wait_for_page_load) {
-        await sleep(1500);
+        await sleep(2500);
     }
     await expand_large_diffs();
-    console.log("Starting detection");
+    let min_lines_count = parseFloat(document.querySelector("#min-lines-count").value);
+    console.log(`Starting detection: >${min_lines_count}<`);
+    if (min_lines_count > 0) {
+        // do nothing
+    } else {
+        min_lines_count = null;
+    }
+
     const added_lines_elems = document.querySelectorAll(ADDED_LINES_SELECTOR);
     const removed_lines_elems = document.querySelectorAll(REMOVED_LINES_SELECTOR);
 
     let detector = new MovedBlocksDetector(Array.from(removed_lines_elems), Array.from(added_lines_elems), getLine);
-    let detected_blocks = detector.detect_moved_blocks();
+    let detected_blocks = detector.detect_moved_blocks(min_lines_count);
     if (detected_blocks) {
         insertDetectedBlockCssClass();
     }
+
     console.log("Highlighting blocks");
+    let loading_animation = document.querySelector("#detected_moves_loading_animation");
+    loading_animation.style.display = "none";
+    let counter = document.querySelector("#detected_moves_counter");
+    counter.innerText = detected_blocks.length;
+    counter.style.display = "inline-block";
+
     for (const iter of detected_blocks.entries()) {
         let [block_index, detected_block] = iter;
         highlightDetectedBlock(block_index, detected_block);
