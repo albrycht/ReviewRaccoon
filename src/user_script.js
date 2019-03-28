@@ -235,7 +235,18 @@ async function patch_diff_match_patch_lib(){
     }
 }
 
-async function main(wait_for_page_load = true) {
+async function wait_for_page_load() {
+    let count = 1;
+    let i = 0;
+    while (count > 0) {
+        count = document.querySelectorAll("div.js-diff-progressive-container include-fragment.diff-progressive-loader").length;
+        await sleep(100);
+        i += 1;
+    }
+    await sleep(1000);  // just in case
+}
+
+async function main() {
     await patch_diff_match_patch_lib();
     let url_regex = /\/files([^\/].*)?$|\/(commits\/([^\/].*)?)$/g;
     if (!window.location.href.match(url_regex)){
@@ -243,10 +254,8 @@ async function main(wait_for_page_load = true) {
         return
     }
     await clear_old_block_markers();
-    add_detect_moved_blocks_button();
-    if (wait_for_page_load) {
-        await sleep(2500);
-    }
+    await wait_for_page_load();
+    await add_detect_moved_blocks_button();
     await expand_large_diffs();
     let min_lines_count = parseFloat(document.querySelector("#min-lines-count").value);
     console.log(`Starting detection: >${min_lines_count}<`);
@@ -282,7 +291,6 @@ async function main(wait_for_page_load = true) {
 
 (function() {
     'use strict';
-    document.addEventListener('pjax:end', main, false);
     main();
 })();
 
