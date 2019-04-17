@@ -167,9 +167,7 @@ function add_detect_moved_blocks_button() {
     summary.appendChild(carret);
     details.appendChild(summary);
     let min_lines_count = localStorage.getItem('detect-moved-blocks__min-lines-count');
-    if (min_lines_count > 0) {
-        // do nothing
-    } else {
+    if (min_lines_count === null || isNaN(min_lines_count)) {
         min_lines_count = 2;
     }
 
@@ -181,7 +179,8 @@ function add_detect_moved_blocks_button() {
         `    <form action="${window.location.href}" accept-charset="UTF-8" method="get">\n` +
         `        <h4 class="mb-2">Detection settings</h4>\n` +
         `        <label for="min-lines-count" class="text-normal" style="float: left; line-height: 25px;">Min lines in block</label>\n` +
-        `        <input type="number" name="min-lines-count" value="${min_lines_count}" id="min-lines-count" style="width: 30px; text-align: right; float: right;">\n` +
+        `        <input type="number" step="any" name="min-lines-count" value="${min_lines_count}" id="min-lines-count" style="width: 30px; text-align: right; float: right;">\n` +
+        `        <p class="text-normal text-gray-light" style="clear: both">Value \< 0 disables detection.</p>\n` +
         `        <button class="btn btn-primary btn-sm col-12 mt-3" type="submit" id="detect-button">Apply and reload</button>\n` +
         `    </form>\n` +
         `</div>`;
@@ -192,11 +191,7 @@ function add_detect_moved_blocks_button() {
 
         let min_lines_count = parseFloat(document.querySelector("#min-lines-count").value);
         console.log(`Starting detection: >${min_lines_count}<`);
-        if (min_lines_count > 0) {
-            // do nothing
-            localStorage.setItem('detect-moved-blocks__min-lines-count', min_lines_count);
-        }
-        // page will be reloaded
+        localStorage.setItem('detect-moved-blocks__min-lines-count', min_lines_count);
     }, false);
 
     button_container.appendChild(details);
@@ -259,17 +254,17 @@ async function main() {
     await expand_large_diffs();
     let min_lines_count = parseFloat(document.querySelector("#min-lines-count").value);
     console.log(`Starting detection: >${min_lines_count}<`);
-    if (min_lines_count > 0) {
-        // do nothing
+    let detected_blocks = [];
+    if (min_lines_count >= 0) {
+        const added_lines_elems = document.querySelectorAll(ADDED_LINES_SELECTOR);
+        const removed_lines_elems = document.querySelectorAll(REMOVED_LINES_SELECTOR);
+
+        let detector = new MovedBlocksDetector(Array.from(removed_lines_elems), Array.from(added_lines_elems), getLine);
+        detected_blocks = detector.detect_moved_blocks(min_lines_count);
     } else {
-        min_lines_count = null;
+        console.log("min_lines_count is smaller then 0 - detection disabled.");
     }
 
-    const added_lines_elems = document.querySelectorAll(ADDED_LINES_SELECTOR);
-    const removed_lines_elems = document.querySelectorAll(REMOVED_LINES_SELECTOR);
-
-    let detector = new MovedBlocksDetector(Array.from(removed_lines_elems), Array.from(added_lines_elems), getLine);
-    let detected_blocks = detector.detect_moved_blocks(min_lines_count);
     if (detected_blocks) {
         insertDetectedBlockCssClass();
     }
