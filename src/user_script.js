@@ -178,7 +178,7 @@ function add_detect_moved_blocks_button() {
     popover.style.left = "-62px";
     popover.innerHTML = `` +
         `<div class="Popover-message text-left p-3 mx-auto Box box-shadow-large col-6">\n` +
-        `    <form action="/StarfishStorage/starfish/pull/5360/files" accept-charset="UTF-8" method="get">\n` +
+        `    <form action="${window.location.href}" accept-charset="UTF-8" method="get">\n` +
         `        <h4 class="mb-2">Detection settings</h4>\n` +
         `        <label for="min-lines-count" class="text-normal" style="float: left; line-height: 25px;">Min lines in block</label>\n` +
         `        <input type="number" name="min-lines-count" value="${min_lines_count}" id="min-lines-count" style="width: 30px; text-align: right; float: right;">\n` +
