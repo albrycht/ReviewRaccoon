@@ -5,7 +5,8 @@
 // @description  show moved blocks of code while doing PR review
 // @author       Michał Albrycht
 // @match        https://github.com/*/pull/*
-// @grant        none
+// @grant        GM_xmlhttpRequest
+// @connect      localhost
 // @require      https://raw.githubusercontent.com/albrycht/MoveBlockDetector/master/src/fuzzyset.js
 // @require      https://raw.githubusercontent.com/albrycht/MoveBlockDetector/master/src/moved_block_detector.js
 // @require      https://raw.githubusercontent.com/google/diff-match-patch/master/javascript/diff_match_patch.js
@@ -121,22 +122,78 @@ function highlightDetectedBlock(block_index, detected_block) {
     }
 }
 
+function htmlToElement(html) {
+    var template = document.createElement('template');
+    html = html.trim(); // Never return a text node of whitespace as the result
+    template.innerHTML = html;
+    return template.content.firstChild;
+}
+
 function add_detect_moved_blocks_button() {
     let button_container = document.querySelector(".pr-review-tools");
     let existing_button = document.querySelector("#detect_moved_blocks");
     if (existing_button !== null) {
         return
     }
+
+    let loading_animation = htmlToElement(
+    `<div id="detected_moves_loading_animation" style="display: inline-block;">` +
+    `<svg version="1.1" id="L4" x="0px" y="0px" viewBox="0 0 100 100" enable-background="new 0 0 0 0" ` +
+    `    style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" ` +
+    `>` +
+    `  <circle fill="#000" stroke="none" cx="6" cy="50" r="8">` +
+    `    <animate attributeName="opacity" dur="1s" values="0;1;0" repeatCount="indefinite" begin="0.1"></animate>` +
+    `  </circle>` +
+    `  <circle fill="#000" stroke="none" cx="36" cy="50" r="8">` +
+    `    <animate attributeName="opacity" dur="1s" values="0;1;0" repeatCount="indefinite" begin="0.2"></animate>` +
+    `  </circle>` +
+    `  <circle fill="#000" stroke="none" cx="66" cy="50" r="8">` +
+    `    <animate attributeName="opacity" dur="1s" values="0;1;0" repeatCount="indefinite" begin="0.3"></animate>` +
+    `  </circle>` +
+    `</svg></div>`);
     let details = document.createElement("details");
     details.className = "diffbar-item details-reset details-overlay position-relative text-center";
 
-    let summary = document.createElement("summary");
-    summary.className = "btn btn-sm";
-    summary.textContent = "Detect moved blocks";
-    summary.id = "detect_moved_blocks";
-    details.appendChild(summary);
+    let carret = document.createElement("div");
+    carret.className = "dropdown-caret";
 
-    details.addEventListener('click', function() {main(false);}, false);
+
+    let summary = document.createElement("summary");
+
+    summary.className = "btn btn-sm";
+    summary.id = "detect_moved_blocks";
+    summary.appendChild(loading_animation);
+    summary.appendChild(htmlToElement('<span class="Counter" style="display: none; margin-right: 4px;" id="detected_moves_counter"></span>'))
+    summary.appendChild(htmlToElement('<span style="margin-right: 4px;">Detect moved blocks</span>'))
+    summary.appendChild(carret);
+    details.appendChild(summary);
+    let min_lines_count = localStorage.getItem('detect-moved-blocks__min-lines-count');
+    if (min_lines_count === null || isNaN(min_lines_count)) {
+        min_lines_count = 2;
+    }
+
+    let popover = document.createElement("div");
+    popover.className = "Popover js-diff-settings mt-2 pt-1";
+    popover.style.left = "-62px";
+    popover.innerHTML = `` +
+        `<div class="Popover-message text-left p-3 mx-auto Box box-shadow-large col-6">\n` +
+        `    <form action="${window.location.href}" accept-charset="UTF-8" method="get">\n` +
+        `        <h4 class="mb-2">Detection settings</h4>\n` +
+        `        <label for="min-lines-count" class="text-normal" style="float: left; line-height: 25px;">Min lines in block</label>\n` +
+        `        <input type="number" step="any" name="min-lines-count" value="${min_lines_count}" id="min-lines-count" style="width: 30px; text-align: right; float: right;">\n` +
+        `        <p class="text-normal text-gray-light" style="clear: both">Value \< 0 disables detection.</p>\n` +
+        `        <button class="btn btn-primary btn-sm col-12 mt-3" type="submit" id="detect-button">Apply and reload</button>\n` +
+        `    </form>\n` +
+        `</div>`;
+    details.appendChild(popover);
+    let detect_button = details.querySelector("#detect-button");
+
+    detect_button.addEventListener('click', function() {
+
+        let min_lines_count = parseFloat(document.querySelector("#min-lines-count").value);
+        console.log(`Starting detection: >${min_lines_count}<`);
+        localStorage.setItem('detect-moved-blocks__min-lines-count', min_lines_count);
+    }, false);
 
     button_container.appendChild(details);
 }
@@ -153,7 +210,7 @@ async function expand_large_diffs(){
     }
     if (load_diff_buttons.length > 0) {
         console.log(`Expanded ${load_diff_buttons.length} large diffs`);
-        await sleep(2000);
+        await sleep(3000);
     }
 }
 
@@ -174,7 +231,18 @@ async function patch_diff_match_patch_lib(){
     }
 }
 
-async function main(wait_for_page_load = true) {
+async function wait_for_page_load() {
+    let count = 1;
+    let i = 0;
+    while (count > 0) {
+        count = document.querySelectorAll("div.js-diff-progressive-container include-fragment.diff-progressive-loader").length;
+        await sleep(100);
+        i += 1;
+    }
+    await sleep(1000);  // just in case
+}
+
+async function main() {
     await patch_diff_match_patch_lib();
     let url_regex = /\/files([^\/].*)?$|\/(commits\/([^\/].*)?)$/g;
     if (!window.location.href.match(url_regex)){
@@ -182,21 +250,51 @@ async function main(wait_for_page_load = true) {
         return
     }
     await clear_old_block_markers();
-    add_detect_moved_blocks_button();
-    if (wait_for_page_load) {
-        await sleep(1500);
-    }
+    await wait_for_page_load();
+    await add_detect_moved_blocks_button();
     await expand_large_diffs();
-    console.log("Starting detection");
-    const added_lines_elems = document.querySelectorAll(ADDED_LINES_SELECTOR);
-    const removed_lines_elems = document.querySelectorAll(REMOVED_LINES_SELECTOR);
+    let min_lines_count = parseFloat(document.querySelector("#min-lines-count").value);
+    console.log(`Starting detection: >${min_lines_count}<`);
+    let detected_blocks = [];
+    if (min_lines_count >= 0) {
+        const added_lines_elems = document.querySelectorAll(ADDED_LINES_SELECTOR);
+        const removed_lines_elems = document.querySelectorAll(REMOVED_LINES_SELECTOR);
+        let post_data = {
+            "added_lines": Array.from(added_lines_elems).map(getLine),
+            "removed_lines": Array.from(removed_lines_elems).map(getLine),
+        };
 
-    let detector = new MovedBlocksDetector(Array.from(removed_lines_elems), Array.from(added_lines_elems), getLine);
-    let detected_blocks = detector.detect_moved_blocks();
+        console.log(`Sending data: ${JSON.stringify(post_data)}`);
+        let server_url = "http://localhost:8000/moved-blocks"
+        GM_xmlhttpRequest({
+            method: "POST",
+            url: server_url,
+            headers: {
+                "Content-Type": "application/json"
+            },
+            data: JSON.stringify(post_data),
+            onload: function(response) {
+                console.log (`MAM ODPOWIEDZ: ${response.responseText}`);
+            }
+        });
+
+        let detector = new MovedBlocksDetector(Array.from(removed_lines_elems), Array.from(added_lines_elems), getLine);
+        detected_blocks = detector.detect_moved_blocks(min_lines_count);
+    } else {
+        console.log("min_lines_count is smaller then 0 - detection disabled.");
+    }
+
     if (detected_blocks) {
         insertDetectedBlockCssClass();
     }
+
     console.log("Highlighting blocks");
+    let loading_animation = document.querySelector("#detected_moves_loading_animation");
+    loading_animation.style.display = "none";
+    let counter = document.querySelector("#detected_moves_counter");
+    counter.innerText = detected_blocks.length;
+    counter.style.display = "inline-block";
+
     for (const iter of detected_blocks.entries()) {
         let [block_index, detected_block] = iter;
         highlightDetectedBlock(block_index, detected_block);
@@ -207,7 +305,6 @@ async function main(wait_for_page_load = true) {
 
 (function() {
     'use strict';
-    document.addEventListener('pjax:end', main, false);
     main();
 })();
 

@@ -48,7 +48,7 @@ class Line {
             line_no = parseInt(line_no)
         }
         this.line_no = line_no;
-        this.trim_text = text ? text.trim() : '';
+        this.trim_text = text ? text.ltrim() : '';
         this.leading_whitespaces = text ? text.substr(0, text.indexOf(this.trim_text.charAt(0))) : '';
         this.trim_hash = hashCode(this.trim_text)
     }
