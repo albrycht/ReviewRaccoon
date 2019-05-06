@@ -3,3 +3,4 @@ gunicorn
 meinheld
 greenlet
 requests
+fuzzyset

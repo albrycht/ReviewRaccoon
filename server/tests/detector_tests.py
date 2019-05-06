@@ -1,6 +1,6 @@
 import unittest
 
-from detector import Line, IndentationType, MatchingBlock
+from detector import Line, IndentationType, MatchingBlock, MovedBlocksDetector
 
 
 class LineTest(unittest.TestCase):
@@ -90,3 +90,110 @@ class LineTest(unittest.TestCase):
         self.assertEqual(matching_block.last_removed_line.line_no, 2)
         self.assertEqual(matching_block.last_added_line.line_no, 13)
         self.assertEqual(len(matching_block.lines), 2)
+
+
+class ChangedLines(object):
+    def __init__(self,file, line_no_to_text):
+        super()
+        self.file = file
+        self.line_no_to_text = line_no_to_text
+
+    def to_array(self):
+        result = []
+        for line_no, text in self.line_no_to_text.items():
+            result.append(Line(self.file, int(line_no), self.line_no_to_text[line_no]))
+        return result
+
+    def to_lines_dicts(self):
+        result = []
+        for line_no, text in self.line_no_to_text.items():
+            result.append({
+                'file': self.file,
+                'line_no': line_no,
+                'trim_text': text,  # we do not need to split text into trim_text and whitespace
+                                    # because it is parsed again in Line constructor
+                'leading_whitespaces': ''
+            })
+        return result
+
+
+def no_op(x):
+    return x
+
+
+class MovedBlocksDetectorTest(unittest.TestCase):
+    def test_simple_1_moved_block(self):
+
+        removed_lines = ChangedLines("file_with_removed_lines", {
+            1: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+            2: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+            3: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
+            4: "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+            5: "5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5"
+        })
+
+        added_lines = ChangedLines("file_with_added_lines", {
+            10: "-------------------------------------------",
+            11: "-------------------------------------------",
+            12: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+            13: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+            14: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
+            15: "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+            16: "-------------------------------------------",
+        })
+
+        detector = MovedBlocksDetector(removed_lines.to_lines_dicts(), added_lines.to_lines_dicts())
+        detected_blocks = detector.detect_moved_blocks()
+        self.assertEqual(len(detected_blocks), 1)
+        self.assertEqual(detected_blocks[0].lines[0].removed_line.line_no, 1)
+        self.assertEqual(detected_blocks[0].lines[0].added_line.line_no, 12)
+        self.assertEqual(detected_blocks[0].last_removed_line.line_no, 4)
+        self.assertEqual(detected_blocks[0].last_added_line.line_no, 15)
+        self.assertEqual(detected_blocks[0].line_count(), 4)
+        self.assertEqual(detected_blocks[0].char_count(), 4 * 43)
+
+    def test_move_block_to_2_parts_in_2_files(self):
+        removed_lines = ChangedLines("file_with_removed_lines", {
+            1: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+            2: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+            3: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
+            4: "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+            5: "5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5",
+            6: "6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6",
+            7: "7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7",
+            8: "8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8",
+            9: "9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9",
+        })
+
+        added_lines_1 = ChangedLines("file_with_added_lines_1", {
+            10: "-------------------------------------------",
+            13: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+            14: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
+            15: "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+        })
+
+        added_lines_2 = ChangedLines("file_with_added_lines_2", {
+            10: "-------------------------------------------",
+            14: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
+            15: "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+            16: "5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5",
+            17: "6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6",
+            18: "-------------------------------------------",
+        })
+        added_lines = added_lines_1.to_lines_dicts() + added_lines_2.to_lines_dicts()
+        detector = MovedBlocksDetector(removed_lines.to_lines_dicts(), added_lines)
+        detected_blocks = detector.detect_moved_blocks()
+        self.assertEqual(len(detected_blocks), 2)
+        self.assertEqual(detected_blocks[0].lines[0].removed_line.line_no, 2)
+        self.assertEqual(detected_blocks[0].lines[0].added_line.line_no, 13)
+        self.assertEqual(detected_blocks[0].last_removed_line.line_no, 4)
+        self.assertEqual(detected_blocks[0].last_added_line.line_no, 15)
+        self.assertEqual(detected_blocks[0].line_count(), 3)
+        self.assertEqual(detected_blocks[0].char_count(), 3 * 43)
+
+        self.assertEqual(detected_blocks[1].lines[0].removed_line.line_no, 3)
+        self.assertEqual(detected_blocks[1].lines[0].added_line.line_no, 14)
+        self.assertEqual(detected_blocks[1].last_removed_line.line_no, 6)
+        self.assertEqual(detected_blocks[1].last_added_line.line_no, 17)
+        self.assertEqual(detected_blocks[1].line_count(), 4)
+        self.assertEqual(detected_blocks[1].char_count(), 4 * 43)
