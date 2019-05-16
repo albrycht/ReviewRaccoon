@@ -1,7 +1,8 @@
+import json
 from collections import defaultdict
 from enum import Enum
+from textwrap import dedent
 from typing import List
-
 from fuzzyset import FuzzySet
 
 
@@ -16,12 +17,20 @@ class Indentation(object):
         self.indent_type = indent_type
 
 
+def split_to_leading_whitespace_and_trim_text(text):
+    trim_text = text.lstrip() if text else ''
+    if trim_text:
+        leading_whitespaces = text[0:text.find(trim_text[0])] if text else ''
+    else:
+        leading_whitespaces = text
+    return leading_whitespaces, trim_text
+
+
 class Line(object):
     def __init__(self, file, line_no, text):
         self.file = file
         self.line_no = int(line_no)
-        self.trim_text = text.lstrip() if text else ''
-        self.leading_whitespaces = text[0:text.find(self.trim_text[0])] if text else ''
+        self.leading_whitespaces, self.trim_text = split_to_leading_whitespace_and_trim_text(text)
 
     @staticmethod
     def from_dict(line_dict):
@@ -57,12 +66,33 @@ class Line(object):
     def __str__(self):
         return f"{self.leading_whitespaces}{self.trim_text}"
 
+    def to_dict(self):
+        return {
+            "file": self.file,
+            "line_no": self.line_no,
+            "leading_whitespaces": self.leading_whitespaces,
+            "trim_text": self.trim_text,
+        }
+
+    def to_json(self):
+        return json.dumps(self.to_dict())
+
 
 class MatchingLine(object):
     def __init__(self, removed_line, added_line, match_probability):
         self.added_line = added_line
         self.removed_line = removed_line
         self.match_probability = match_probability
+
+    def to_dict(self):
+        return {
+            "added_line": self.added_line.to_dict(),
+            "removed_line": self.removed_line.to_dict(),
+            "match_probability": self.match_probability,
+        }
+
+    def to_json(self):
+        return json.dumps(self.to_dict())
 
 
 class MatchingBlock(object):
@@ -145,12 +175,23 @@ class MatchingBlock(object):
                 -self.weighted_lines_count)
 
     def __str__(self):
-        return f"Block(\n\
-        removed_file: {self.last_removed_line.file}\
-        added_file: {self.last_added_line.file}\
-        removed_lines: {self.lines[0].removed_line.line_no} -{self.last_removed_line.line_no}\
-        added_lines: {self.lines[0].added_line.line_no} -{self.last_added_line.line_no}\
-        );\n"
+        return dedent(f"""Block(
+        removed_file: {self.last_removed_line.file}
+        added_file: {self.last_added_line.file}
+        removed_lines: {self.lines[0].removed_line.line_no}-{self.last_removed_line.line_no}
+        added_lines: {self.lines[0].added_line.line_no}-{self.last_added_line.line_no}
+        );\n""")
+
+    def __repr__(self):
+        return str(self)
+
+    def to_dict(self):
+        return {
+            "lines": [line.to_dict() for line in self.lines]
+        }
+
+    def to_json(self):
+        return json.dumps(self.to_dict())
 
 
 class MovedBlocksDetector(object):
@@ -160,7 +201,7 @@ class MovedBlocksDetector(object):
         self.trim_text_to_array_of_added_lines = defaultdict(list)
         self.added_file_name_to_line_no_to_line = defaultdict(dict)
         self.removed_file_name_to_line_no_to_line = defaultdict(dict)
-        self.added_lines_fuzzy_set = FuzzySet()
+        self.added_lines_fuzzy_set = FuzzySet(use_levenshtein=False)
 
         for added_line_dict in added_lines_dicts:
             line = Line.from_dict(added_line_dict)
@@ -200,7 +241,7 @@ class MovedBlocksDetector(object):
             if matching_block.last_added_line.file == last_matching_block.last_added_line.file \
                     and matching_block.lines[0].added_line.line_no >= last_matching_block.lines[0].added_line.line_no \
                     and matching_block.last_added_line.line_no <= last_matching_block.last_added_line.line_no:
-                if not getattr(matching_block, "remove_part_is_inside_larger_block", default=False):
+                if not getattr(matching_block, "remove_part_is_inside_larger_block", False):  # TODO getattr was used to act like in javascript - rewrite it without getattr
                     ok_blocks.append(matching_block)
 
             else:
@@ -247,12 +288,12 @@ class MovedBlocksDetector(object):
         new_matching_blocks = []
 
         for removed_line in self.removed_lines:
-            fuzzy_matching_pairs = self.added_lines_fuzzy_set.get(removed_line.trim_text, None)
-            if removed_line.trim_text == '':
-                fuzzy_matching_pairs = [[1, '']]
-            else:
+            if removed_line.trim_text:
+                fuzzy_matching_pairs = self.added_lines_fuzzy_set.get(removed_line.trim_text, None)
                 # iterate over currently_matching_blocks and try to extend them with empty lines
                 self.extend_matching_blocks_with_empty_added_lines_if_possible(currently_matching_blocks)
+            else:
+                fuzzy_matching_pairs = [[1, '']]
 
             if not fuzzy_matching_pairs:
                 continue
@@ -294,6 +335,6 @@ class MovedBlocksDetector(object):
 
         filtered_blocks = self.filter_blocks(detected_blocks)
         print(f'Detected {len(filtered_blocks)} blocks ({len(detected_blocks) - len(filtered_blocks)} filtered)')
-        print('Blocks: {filtered_blocks}')
+        print(f'Blocks: {filtered_blocks}')
         return filtered_blocks
 
