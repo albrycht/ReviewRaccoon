@@ -1,4 +1,7 @@
 import json
+import time
+from contextlib import contextmanager
+
 import falcon
 
 from detector import MovedBlocksDetector
@@ -17,9 +20,11 @@ class MovedBlocksResource(object):
         resp.body = json.dumps({"message": "Hello world!"})
 
     def on_post(self, req, resp):
-        added_lines = req.media.get('added_lines')
-        removed_lines = req.media.get('removed_lines')
-        detector = MovedBlocksDetector(removed_lines, added_lines)
+        diff_text = req.media.get('diff_text')
+
+        # added_lines = req.media.get('added_lines')
+        # removed_lines = req.media.get('removed_lines')
+        detector = MovedBlocksDetector.from_diff(diff_text)
         detected_blocks = detector.detect_moved_blocks()
         resp.body = json.dumps(detected_blocks, cls=CustomJsonEncoder)
 
@@ -27,7 +32,8 @@ class MovedBlocksResource(object):
 def create_api():
     api = falcon.API()
     moved_blocks = MovedBlocksResource()
-    api.add_route('/moved-blocks', moved_blocks)
+    # api.add_route('/moved-blocks', moved_blocks)
+    api.add_route('/from-diff', moved_blocks)
     return api
 
 

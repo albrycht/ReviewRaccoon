@@ -7,6 +7,7 @@
 // @match        https://github.com/*/pull/*
 // @grant        GM_xmlhttpRequest
 // @connect      localhost
+// @connect      patch-diff.githubusercontent.com
 // @require      https://raw.githubusercontent.com/albrycht/MoveBlockDetector/master/src/fuzzyset.js
 // @require      https://raw.githubusercontent.com/albrycht/MoveBlockDetector/master/src/moved_block_detector.js
 // @require      https://raw.githubusercontent.com/google/diff-match-patch/master/javascript/diff_match_patch.js
@@ -264,26 +265,78 @@ async function main() {
             "removed_lines": Array.from(removed_lines_elems).map(getLine),
         };
 
-        console.log(`Sending data: ${JSON.stringify(post_data)}`);
-        let server_url = "http://localhost:8000/moved-blocks"
+        let url_to_get = get_diff_url(window.location.href);
+        let diff_text = null;
+        console.log(`Sending request to: ${url_to_get}`);
         GM_xmlhttpRequest({
-            method: "POST",
-            url: server_url,
+            method: "GET",
+            url: url_to_get,
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "text/plain"
             },
-            data: JSON.stringify(post_data),
-            onload: function(response) {
-                console.log (`MAM ODPOWIEDZ: ${response.responseText}`);
-            }
+            data: "",
+            onload: received_diff_text,
         });
+
+        //console.log(`Sending data: ${JSON.stringify(post_data)}`);
+        //let server_url = "http://localhost:8000/moved-blocks"
+        //GM_xmlhttpRequest({
+        //    method: "POST",
+        //    url: server_url,
+        //    headers: {
+        //        "Content-Type": "application/json"
+        //    },
+        //    data: JSON.stringify(post_data),
+        //    onload: function(response) {
+        //        console.log (`MAM ODPOWIEDZ: ${response.responseText}`);
+        //    }
+        //});
 
         let detector = new MovedBlocksDetector(Array.from(removed_lines_elems), Array.from(added_lines_elems), getLine);
         detected_blocks = detector.detect_moved_blocks(min_lines_count);
     } else {
         console.log("min_lines_count is smaller then 0 - detection disabled.");
     }
+}
 
+function get_diff_url(url){
+	let regex = /https:\/\/github\.com\/(?<user_name>\w+)\/(?<repo_name>\w+)\/pull\/(?<pull_number>\d+)(?:\/commits\/(?<commit_hash>\w+))?/g
+	let match = regex.exec(url);
+    if (!match){
+  	    return null;
+    }
+    let user_name = match.groups.user_name;
+    let repo_name = match.groups.repo_name;
+    let pull_number = match.groups.pull_number;
+    let commit_hash = match.groups.commit_hash
+    if (commit_hash === undefined) {
+  	    return `https://patch-diff.githubusercontent.com/raw/${user_name}/${repo_name}/pull/${pull_number}.diff`
+    } else {
+  	    console.log(`commit hash: ${commit_hash}`)
+        return `https://github.com/${user_name}/${repo_name}/commit/${commit_hash}.diff`
+    }
+}
+
+function received_diff_text(response) {
+    let diff_text = response.responseText;
+
+    //console.log(`Sending data: ${JSON.stringify(post_data)}`);
+    let server_url = "http://localhost:8000/from-diff"
+    GM_xmlhttpRequest({
+        method: "POST",
+        url: server_url,
+        headers: {
+            "Content-Type": "application/json"
+        },
+        data: JSON.stringify({'diff_text': diff_text}),
+        onload: highlights_changes,
+    });
+
+}
+
+function highlights_changes(response) {
+    console.log (`MAM ODPOWIEDZ Z SERWERA`);
+    let detected_blocks = JSON.parse(response.responseText);
     if (detected_blocks) {
         insertDetectedBlockCssClass();
     }

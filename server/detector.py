@@ -3,7 +3,40 @@ from collections import defaultdict
 from enum import Enum
 from textwrap import dedent
 from typing import List
+
+from unidiff import PatchSet
+
 from fuzzyset import FuzzySet
+
+
+def diff_to_added_and_removed_lines(diff_text):
+    patch = PatchSet(diff_text)
+    added_lines = []
+    removed_lines = []
+    for patched_file in patch:
+        for hunk in patched_file:
+            for line in hunk:
+                leading_whitespace, trim_text = split_to_leading_whitespace_and_trim_text(line.value.rstrip('\n'))
+                file = patched_file.path
+                if line.is_added:
+                    line_no = line.target_line_no
+                    lines_list = added_lines
+                elif line.is_removed:
+                    line_no = line.source_line_no
+                    lines_list = removed_lines
+                else:
+                    continue
+                lines_list.append({
+                    'file': file,
+                    'line_no': line_no,
+                    'trim_text': trim_text,
+                    'leading_whitespaces': leading_whitespace,
+                })
+    return {
+        'added_lines': added_lines,
+        'removed_lines': removed_lines,
+    }
+
 
 
 class IndentationType(Enum):
@@ -214,6 +247,11 @@ class MovedBlocksDetector(object):
             self.removed_lines.append(line)
             self.removed_file_name_to_line_no_to_line[line.file][line.line_no] = line
 
+    @staticmethod
+    def from_diff(diff_text):
+        parsed = diff_to_added_and_removed_lines(diff_text)
+        return MovedBlocksDetector(parsed['removed_lines'], parsed['added_lines'])
+
     def filter_out_block_inside_other_blocks(self, filtered_blocks: List[MatchingBlock]):
         filtered_blocks.sort(key=lambda fb: fb.get_filter_sort_tuple_for_remove())
 
@@ -337,4 +375,3 @@ class MovedBlocksDetector(object):
         print(f'Detected {len(filtered_blocks)} blocks ({len(detected_blocks) - len(filtered_blocks)} filtered)')
         print(f'Blocks: {filtered_blocks}')
         return filtered_blocks
-
