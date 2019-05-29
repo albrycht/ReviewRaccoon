@@ -119,8 +119,8 @@ class MatchingLine(object):
 
     def to_dict(self):
         return {
-            "added_line": self.added_line.to_dict(),
-            "removed_line": self.removed_line.to_dict(),
+            "added_line": self.added_line.to_dict() if self.added_line else None,
+            "removed_line": self.removed_line.to_dict() if self.removed_line else None,
             "match_probability": self.match_probability,
         }
 

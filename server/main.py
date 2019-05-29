@@ -21,10 +21,12 @@ class MovedBlocksResource(object):
 
     def on_post(self, req, resp):
         diff_text = req.media.get('diff_text')
-
-        # added_lines = req.media.get('added_lines')
-        # removed_lines = req.media.get('removed_lines')
-        detector = MovedBlocksDetector.from_diff(diff_text)
+        if diff_text:
+            detector = MovedBlocksDetector.from_diff(diff_text)
+        else:
+            added_lines = req.media.get('added_lines')
+            removed_lines = req.media.get('removed_lines')
+            detector = MovedBlocksDetector(removed_lines, added_lines)
         detected_blocks = detector.detect_moved_blocks()
         resp.body = json.dumps(detected_blocks, cls=CustomJsonEncoder)
 
@@ -32,8 +34,7 @@ class MovedBlocksResource(object):
 def create_api():
     api = falcon.API()
     moved_blocks = MovedBlocksResource()
-    # api.add_route('/moved-blocks', moved_blocks)
-    api.add_route('/from-diff', moved_blocks)
+    api.add_route('/moved-blocks', moved_blocks)
     return api
 
 
