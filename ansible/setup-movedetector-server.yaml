@@ -1,0 +1,162 @@
+---
+# How to execute this playbook:
+# - check content of ansible/hosts file
+# - ansible-playbook MoveBlockDetector/ansible/setup-movedetector-server.yaml -i MoveBlockDetector/ansible/hosts
+# Above will work assuming that you have correct key as default key 'id_rsa'
+# add --private-key ~/.ssh/your_key.pem to use different ssh key.
+- hosts: movedetector
+  vars_prompt:
+  - name: git_repo_password
+    prompt: "Enter your git repository password"
+    private: yes
+  vars:
+    movedetector_home: "/home/movedetector"
+    movedetector_bin: "{{ movedetector_home }}/bin"
+    movedetector_repo: "{{ movedetector_home }}/movedetector_repo"
+    movedetector_venv: "{{ movedetector_home }}/.virtualenvs/movedetector_venv"
+    movedetector_log: "{{ movedetector_home }}/log"
+    movedetector_static_dir: "/var/www/movedetector/static"
+
+  become: true
+  become_user: root
+  become_method: sudo
+  gather_facts: no
+  pre_tasks:
+    - name: Install python2  # required by ansible, need to use 'raw' because other ansible commands do not work without python 2
+      raw: sudo apt-get -y install python-simplejson
+
+  tasks:
+  - name: Add webapps group
+    group:
+      name: webapps
+      state: present
+  - name: Create movedetector user
+    user:
+      name: movedetector
+      password: 'movedetector'
+      groups:
+        - webapps
+        - sudo
+      state: present
+      shell: /bin/bash
+      system: no
+      createhome: yes
+      home: "{{ movedetector_home }}"
+  - name: Allow 'movedetector' user to have passwordless sudo
+    lineinfile:
+      dest: /etc/sudoers.d/movedetector
+      state: present
+      create: yes
+      regexp: '^%movedetector'
+      line: '%movedetector ALL=(ALL) NOPASSWD: ALL'
+      validate: 'visudo -cf %s'
+
+  - name: install pip, virtualenv, virtualenvwrapper
+    apt:
+      name:
+      - python-pip
+      - virtualenv
+      - virtualenvwrapper
+      state: present
+
+  - block:
+
+    - name: checkout git repo
+      git:
+        repo: "https://albrycht:{{ git_repo_password | urlencode }}@github.com/albrycht/MoveBlockDetector.git"
+        dest: "{{ movedetector_repo }}"
+        version: dev  # BRANCH NAME - TODO change to master
+
+    - name: Install python prerequisites
+      apt: name=software-properties-common state=present
+      become: true
+
+    - name: Add deadsnakes repo
+      apt_repository: repo="ppa:deadsnakes/ppa"
+      become: true
+
+    - name: Install python
+      apt: name="python3.7-dev" state=present
+      become: true
+
+    - name: Install requirements
+      pip:
+        requirements: "{{ movedetector_repo }}/server/requirements/prod.txt"
+        virtualenv: "{{ movedetector_venv }}"
+        virtualenv_python: python3.7
+      become_user: movedetector
+
+    - name: Install gunicorn
+      pip:
+        name: gunicorn
+        virtualenv: "{{ movedetector_venv }}"
+
+    - name: Ensure bin folder
+      file:
+        path: '{{ movedetector_bin }}'
+        state: directory
+        mode: 0750
+      become_user: movedetector
+
+    - name: Ensure log folder
+      file:
+        path: '{{ movedetector_log }}'
+        state: directory
+        mode: 0750
+      become_user: movedetector
+#
+#    - name: copy gunicorn_start.sh file to bin folder
+#      copy:
+#        src: "{{ movedetector_repo }}/MazakProject/tools/gunicorn_start.sh"
+#        dest: "{{ movedetector_bin }}/"
+#        remote_src: yes
+#
+#    - name: Set proper project paths in gunicorn_start.sh and make it executable
+#      lineinfile:
+#        dest: "{{ movedetector_bin }}/gunicorn_start.sh"
+#        state: present
+#        regexp: '{{ item.regexp }}'
+#        line: '{{ item.line }}'
+#        mode: 0750
+#      with_items:
+#        - { regexp: '^DJANGO_DIR=', line: 'DJANGO_DIR={{ movedetector_repo }}/MazakProject' }
+#        - { regexp: '^VENV_PATH=', line: 'VENV_PATH={{ movedetector_venv }}' }
+#    - name: replace server address in static
+#      lineinfile:
+#        dest: "{{ movedetector_repo }}/MazakProject/MazakProject/settings.py"
+#        state: present
+#        regexp: '(\s+)PRODUCATION_STATIC_URL\s+=.*'
+#        line: '\1PRODUCATION_STATIC_URL = "http://{{ ansible_host }}/mazak/static/"'
+#        backrefs: yes
+#    become: true
+#    become_user: mazak
+#
+#  - include_tasks: install-npm-lessc.yaml
+#  - include_tasks: setup-apache2.yaml
+#  - include_tasks: setup-supervisor.yaml
+#
+#  - name: sync static files
+#    raw: "{{ movedetector_repo }}/MazakProject/sync_static.sh"
+#
+#  - include_tasks: setup-backup.yaml
+#
+#  - name: Ensure mazak.log file
+#    file:
+#      path: '{{ movedetector_repo }}/MazakProject/mazak.log'
+#      state: touch
+#      mode: 0750
+#      owner: mazak
+#
+#  - name: Create mazak.log symlink in log directory
+#    file:
+#      src: '{{ movedetector_repo }}/MazakProject/mazak.log'
+#      dest: '{{ movedetector_log }}/mazak.log'
+#      state: link
+#
+#  - name: Reminder 1
+#    debug:
+#      msg: "Remember to copy database as 'db_production.sqlite3'"
+#
+#  - name: Reminder 2
+#    debug:
+#      msg: "Make sure that ports 80 (for apache) and 8000 (for gunicorn) are opened"

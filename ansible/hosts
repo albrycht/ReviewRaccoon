@@ -1,0 +1,2 @@
+[web]
+movedetector ansible_host=movedetector.pl ansible_user=root
