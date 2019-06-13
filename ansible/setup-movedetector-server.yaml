@@ -104,59 +104,36 @@
         state: directory
         mode: 0750
       become_user: movedetector
-#
-#    - name: copy gunicorn_start.sh file to bin folder
-#      copy:
-#        src: "{{ movedetector_repo }}/MazakProject/tools/gunicorn_start.sh"
-#        dest: "{{ movedetector_bin }}/"
-#        remote_src: yes
-#
-#    - name: Set proper project paths in gunicorn_start.sh and make it executable
-#      lineinfile:
-#        dest: "{{ movedetector_bin }}/gunicorn_start.sh"
-#        state: present
-#        regexp: '{{ item.regexp }}'
-#        line: '{{ item.line }}'
-#        mode: 0750
-#      with_items:
-#        - { regexp: '^DJANGO_DIR=', line: 'DJANGO_DIR={{ movedetector_repo }}/MazakProject' }
-#        - { regexp: '^VENV_PATH=', line: 'VENV_PATH={{ movedetector_venv }}' }
-#    - name: replace server address in static
-#      lineinfile:
-#        dest: "{{ movedetector_repo }}/MazakProject/MazakProject/settings.py"
-#        state: present
-#        regexp: '(\s+)PRODUCATION_STATIC_URL\s+=.*'
-#        line: '\1PRODUCATION_STATIC_URL = "http://{{ ansible_host }}/mazak/static/"'
-#        backrefs: yes
-#    become: true
-#    become_user: mazak
-#
-#  - include_tasks: install-npm-lessc.yaml
+
+    - name: copy gunicorn_start.sh file to bin folder
+      copy:
+        src: "{{ movedetector_repo }}/server/scripts/gunicorn_start.sh"
+        dest: "{{ movedetector_bin }}/"
+        remote_src: yes
+
+    - name: Set proper project paths in gunicorn_start.sh and make it executable
+      lineinfile:
+        dest: "{{ movedetector_bin }}/gunicorn_start.sh"
+        state: present
+        regexp: '{{ item.regexp }}'
+        line: '{{ item.line }}'
+        mode: 0750
+      with_items:
+        - { regexp: '^SERVER_APP_DIR=', line: 'SERVER_APP_DIR={{ movedetector_repo }}/server' }
+        - { regexp: '^VENV_PATH=', line: 'VENV_PATH={{ movedetector_venv }}' }
+
 #  - include_tasks: setup-apache2.yaml
-#  - include_tasks: setup-supervisor.yaml
-#
-#  - name: sync static files
-#    raw: "{{ movedetector_repo }}/MazakProject/sync_static.sh"
-#
-#  - include_tasks: setup-backup.yaml
-#
-#  - name: Ensure mazak.log file
-#    file:
-#      path: '{{ movedetector_repo }}/MazakProject/mazak.log'
-#      state: touch
-#      mode: 0750
-#      owner: mazak
-#
-#  - name: Create mazak.log symlink in log directory
-#    file:
-#      src: '{{ movedetector_repo }}/MazakProject/mazak.log'
-#      dest: '{{ movedetector_log }}/mazak.log'
-#      state: link
-#
-#  - name: Reminder 1
-#    debug:
-#      msg: "Remember to copy database as 'db_production.sqlite3'"
-#
-#  - name: Reminder 2
-#    debug:
-#      msg: "Make sure that ports 80 (for apache) and 8000 (for gunicorn) are opened"
+  - include_tasks: setup-supervisor.yaml
+
+  - name: Ensure movedetector.log file
+    file:
+      path: '{{ movedetector_repo }}/server/movedetector.log'
+      state: touch
+      mode: 0750
+      owner: mazak
+
+  - name: Create log file symlink in log directory
+    file:
+      src: '{{ movedetector_repo }}/server/movedetector.log'
+      dest: '{{ movedetector_log }}/movedetector.log'
+      state: link

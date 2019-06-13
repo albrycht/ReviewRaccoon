@@ -3,6 +3,7 @@ from textwrap import dedent
 import requests
 from falcon import testing
 from unidiff import PatchSet
+import json
 
 from detector import split_to_leading_whitespace_and_trim_text
 from main import create_api
@@ -40,6 +41,7 @@ class TestMyApp(MyTestCase):
         post_data = {
             'diff_text': diff_text,
         }
+        print(f"JSON:\n{json.dumps(post_data)}")
 
         result = self.simulate_post('/moved-blocks', json=post_data)
         self.assertEqual(len(result.json), 1)

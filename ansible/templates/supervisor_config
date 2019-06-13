@@ -1,0 +1,5 @@
+[program:movedetector]
+command = {{ movedetector_bin }}/gunicorn_start.sh
+user = movedetector
+stdout_logfile={{ movedetector_log }}/gunicorn_supervisor.log
+redirect_stderr = true

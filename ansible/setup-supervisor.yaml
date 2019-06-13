@@ -1,0 +1,20 @@
+- block:
+
+  - name: install supervisor
+    apt:
+      name: supervisor
+      state: latest
+      update_cache: yes
+
+  - name: save supervisor config
+    template: src=templates/supervisor_config dest=/etc/supervisor/conf.d/movedetector.conf
+
+  - name: reload supervisor
+    supervisorctl:
+      name: movedetector
+      state: present
+
+  - name: start movedetector app
+    supervisorctl:
+      name: movedetector
+      state: started
