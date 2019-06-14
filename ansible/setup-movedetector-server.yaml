@@ -118,6 +118,8 @@
         regexp: '{{ item.regexp }}'
         line: '{{ item.line }}'
         mode: 0750
+        owner: movedetector
+
       with_items:
         - { regexp: '^SERVER_APP_DIR=', line: 'SERVER_APP_DIR={{ movedetector_repo }}/server' }
         - { regexp: '^VENV_PATH=', line: 'VENV_PATH={{ movedetector_venv }}' }
@@ -130,10 +132,11 @@
       path: '{{ movedetector_repo }}/server/movedetector.log'
       state: touch
       mode: 0750
-      owner: mazak
+      owner: movedetector
 
   - name: Create log file symlink in log directory
     file:
       src: '{{ movedetector_repo }}/server/movedetector.log'
       dest: '{{ movedetector_log }}/movedetector.log'
       state: link
+      owner: movedetector

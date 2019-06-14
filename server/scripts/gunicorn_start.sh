@@ -7,7 +7,7 @@ VENV_PATH=/path/to/mazak_venv                               # filled by ansible
 BIND_ADDRESS=0.0.0.0:8000
 USER=movedetector                                           # filled by ansible
 NUM_WORKERS=5                                     # how many worker processes should Gunicorn spawn
-SERVER_MODULE_NAME=MazakProject.wsgi                     # WSGI module name
+SERVER_MODULE_NAME=main                     # WSGI module name
 REQUEST_TIMEOUT_SEC=60
 
 echo "Starting $NAME as `whoami`"
