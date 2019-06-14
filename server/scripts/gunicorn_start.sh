@@ -19,7 +19,7 @@ export PYTHONPATH=$SERVER_APP_DIR:$PYTHONPATH
 
 # Start your gunicorn
 # Programs meant to be run under supervisor should not daemonize themselves (do not use --daemon)
-exec gunicorn ${SERVER_MODULE_NAME}:application \
+exec gunicorn ${SERVER_MODULE_NAME}:app \
   --name $NAME \
   --workers $NUM_WORKERS \
   --user=$USER\
