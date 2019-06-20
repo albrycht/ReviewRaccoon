@@ -124,8 +124,9 @@
         - { regexp: '^SERVER_APP_DIR=', line: 'SERVER_APP_DIR={{ movedetector_repo }}/server' }
         - { regexp: '^VENV_PATH=', line: 'VENV_PATH={{ movedetector_venv }}' }
 
-#  - include_tasks: setup-apache2.yaml
+  - include_tasks: setup-nginx.yaml
   - include_tasks: setup-supervisor.yaml
+  - include_tasks: setup-certbot.yaml
 
   - name: Ensure movedetector.log file
     file:

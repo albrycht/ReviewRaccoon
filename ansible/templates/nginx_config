@@ -1,0 +1,9 @@
+server {
+    listen 80;
+    server_name movedetector.pl www.movedetector.pl;
+
+    location / {
+        include proxy_params;
+        proxy_pass http://localhost:8000;
+    }
+}

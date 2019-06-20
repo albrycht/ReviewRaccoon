@@ -1,0 +1,24 @@
+- block:
+
+  - name: Add certbot repo
+    apt_repository: repo="ppa:certbot/certbot"
+    become: true
+
+  - name: install certbot
+    apt:
+      name: python-certbot-nginx
+      state: latest
+      update_cache: yes
+
+  - name: reload nginx
+    service: name=nginx state=reloaded
+
+  - name: Create and install cert
+    # TODO add domain www.movedetector.pl
+    raw: sudo certbot --nginx -n -d movedetector.pl --agree-tos --email michalalbrycht@gmail.com
+
+  - name: Add cronjob for cert renewal
+    cron:
+      name: letsencrypt_cert_renewal
+      special_time: weekly
+      job: sudo certbot renew
