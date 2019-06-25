@@ -6,7 +6,7 @@
 // @author       Michał Albrycht
 // @match        https://github.com/*/pull/*
 // @grant        GM_xmlhttpRequest
-// @connect      localhost
+// @connect      movedetector.pl
 // @connect      patch-diff.githubusercontent.com
 // @require      https://raw.githubusercontent.com/albrycht/MoveBlockDetector/master/src/fuzzyset.js
 // @require      https://raw.githubusercontent.com/albrycht/MoveBlockDetector/master/src/moved_block_detector.js
@@ -303,7 +303,7 @@ function received_diff_text(response) {
     let diff_text = response.responseText;
 
     console.log(`Dostalem diffa`);
-    let server_url = "http://localhost:8000/moved-blocks"
+    let server_url = "https://movedetector.pl/moved-blocks"
     GM_xmlhttpRequest({
         method: "POST",
         url: server_url,

@@ -41,7 +41,6 @@ class TestMyApp(MyTestCase):
         post_data = {
             'diff_text': diff_text,
         }
-        print(f"JSON:\n{json.dumps(post_data)}")
 
         result = self.simulate_post('/moved-blocks', json=post_data)
         self.assertEqual(len(result.json), 1)
