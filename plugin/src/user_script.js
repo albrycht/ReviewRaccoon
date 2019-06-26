@@ -4,6 +4,7 @@
 // @version      0.1
 // @description  show moved blocks of code while doing PR review
 // @author       Michał Albrycht
+// @match        https://github.com/pulls
 // @match        https://github.com/*/pull/*
 // @grant        GM_xmlhttpRequest
 // @connect      movedetector.pl
@@ -19,6 +20,8 @@ const REMOVED_DATA_TYPE_ATTR = "deletion";
 const ADDED_DATA_TYPE_ATTR = "addition";
 const ALL_COLORS = ['#058DC7', '#50B432', '#ED561B', '#DDDF00', '#24CBE5', '#64E572', '#FF9655', '#FFF263', '#6AF9C4',
                     'red', 'orange', 'green', 'blue', 'purple', 'brown'];
+
+var timer = null;
 
 function insertDetectedBlockCssClass(){
     const style = document.createElement('style');
@@ -130,13 +133,13 @@ function htmlToElement(html) {
     return template.content.firstChild;
 }
 
+function detect_moved_block_button_exists(){
+    let existing_button = document.querySelector("#detect_moved_blocks");
+    return existing_button !== null;
+}
+
 function add_detect_moved_blocks_button() {
     let button_container = document.querySelector(".pr-review-tools");
-    let existing_button = document.querySelector("#detect_moved_blocks");
-    if (existing_button !== null) {
-        return
-    }
-
     let loading_animation = htmlToElement(
     `<div id="detected_moves_loading_animation" style="display: inline-block;">` +
     `<svg version="1.1" id="L4" x="0px" y="0px" viewBox="0 0 100 100" enable-background="new 0 0 0 0" ` +
@@ -164,8 +167,8 @@ function add_detect_moved_blocks_button() {
     summary.className = "btn btn-sm";
     summary.id = "detect_moved_blocks";
     summary.appendChild(loading_animation);
-    summary.appendChild(htmlToElement('<span class="Counter" style="display: none; margin-right: 4px;" id="detected_moves_counter"></span>'))
-    summary.appendChild(htmlToElement('<span style="margin-right: 4px;">Detect moved blocks</span>'))
+    summary.appendChild(htmlToElement('<span class="Counter" style="display: none; margin-right: 4px;" id="detected_moves_counter"></span>'));
+    summary.appendChild(htmlToElement('<span style="margin-right: 4px;">Detect moved blocks</span>'));
     summary.appendChild(carret);
     details.appendChild(summary);
     let min_lines_count = localStorage.getItem('detect-moved-blocks__min-lines-count');
@@ -222,15 +225,6 @@ async function clear_old_block_markers() {
     }
 }
 
-async function patch_diff_match_patch_lib(){
-    // https://github.com/google/diff-match-patch/issues/39
-    if (typeof Symbol === 'function') {
-        diff_match_patch.Diff.prototype[Symbol.iterator] = function* () {
-          yield this[0];
-          yield this[1];
-        };
-    }
-}
 
 async function wait_for_page_load() {
     let count = 1;
@@ -243,30 +237,80 @@ async function wait_for_page_load() {
     await sleep(1000);  // just in case
 }
 
-async function main() {
-    await patch_diff_match_patch_lib();
+function is_proper_page(){
     let url_regex = /\/files([^\/].*)?$|\/(commits\/([^\/].*)?)$/g;
-    if (!window.location.href.match(url_regex)){
-        console.log("Wrong URL - skipping detection of moved blocks");
+    return window.location.href.match(url_regex);
+}
+
+function get_diff_url(url){
+	let regex = /https:\/\/github\.com\/(?<user_name>\w+)\/(?<repo_name>\w+)\/pull\/(?<pull_number>\d+)(?:\/commits\/(?<commit_hash>\w+))?/g;
+	let match = regex.exec(url);
+    if (!match){
+  	    return null;
+    }
+    let user_name = match.groups.user_name;
+    let repo_name = match.groups.repo_name;
+    let pull_number = match.groups.pull_number;
+    let commit_hash = match.groups.commit_hash;
+    if (commit_hash === undefined) {
+  	    return `https://patch-diff.githubusercontent.com/raw/${user_name}/${repo_name}/pull/${pull_number}.diff`
+    } else {
+        return `https://github.com/${user_name}/${repo_name}/commit/${commit_hash}.diff`
+    }
+}
+
+function highlights_changes(response) {
+    console.log(`Received detected blocks`);
+    let detected_blocks = JSON.parse(response.responseText);
+    if (detected_blocks) {
+        insertDetectedBlockCssClass();
+    }
+
+    let loading_animation = document.querySelector("#detected_moves_loading_animation");
+    loading_animation.style.display = "none";
+    let counter = document.querySelector("#detected_moves_counter");
+    counter.innerText = detected_blocks.length;
+    counter.style.display = "inline-block";
+
+    for (const iter of detected_blocks.entries()) {
+        let [block_index, detected_block] = iter;
+        highlightDetectedBlock(block_index, detected_block);
+    }
+    correct_marker_heights();
+    console.log("Done");
+}
+
+function received_diff_text(response) {
+    let diff_text = response.responseText;
+
+    console.log(`Dostalem diffa`);
+    let server_url = "https://movedetector.pl/moved-blocks";
+    GM_xmlhttpRequest({
+        method: "POST",
+        url: server_url,
+        headers: {
+            "Content-Type": "application/json"
+        },
+        data: JSON.stringify({'diff_text': diff_text}),
+        onload: highlights_changes,
+    });
+}
+
+async function detect_moves(){
+    if (!is_proper_page()){
         return
     }
-    await clear_old_block_markers();
-    await wait_for_page_load();
+
+    if (detect_moved_block_button_exists()){
+        return
+    }
     await add_detect_moved_blocks_button();
+    await wait_for_page_load();
     await expand_large_diffs();
     let min_lines_count = parseFloat(document.querySelector("#min-lines-count").value);
     console.log(`Starting detection: >${min_lines_count}<`);
-    let detected_blocks = [];
     if (min_lines_count >= 0) {
-        const added_lines_elems = document.querySelectorAll(ADDED_LINES_SELECTOR);
-        const removed_lines_elems = document.querySelectorAll(REMOVED_LINES_SELECTOR);
-        let post_data = {
-            "added_lines": Array.from(added_lines_elems).map(getLine),
-            "removed_lines": Array.from(removed_lines_elems).map(getLine),
-        };
-
         let url_to_get = get_diff_url(window.location.href);
-        let diff_text = null;
         console.log(`Sending request to: ${url_to_get}`);
         GM_xmlhttpRequest({
             method: "GET",
@@ -282,60 +326,19 @@ async function main() {
     }
 }
 
-function get_diff_url(url){
-	let regex = /https:\/\/github\.com\/(?<user_name>\w+)\/(?<repo_name>\w+)\/pull\/(?<pull_number>\d+)(?:\/commits\/(?<commit_hash>\w+))?/g
-	let match = regex.exec(url);
-    if (!match){
-  	    return null;
-    }
-    let user_name = match.groups.user_name;
-    let repo_name = match.groups.repo_name;
-    let pull_number = match.groups.pull_number;
-    let commit_hash = match.groups.commit_hash
-    if (commit_hash === undefined) {
-  	    return `https://patch-diff.githubusercontent.com/raw/${user_name}/${repo_name}/pull/${pull_number}.diff`
-    } else {
-        return `https://github.com/${user_name}/${repo_name}/commit/${commit_hash}.diff`
+async function patch_diff_match_patch_lib(){
+    // For more information see: https://github.com/google/diff-match-patch/issues/39
+    if (typeof Symbol === 'function') {
+        diff_match_patch.Diff.prototype[Symbol.iterator] = function* () {
+          yield this[0];
+          yield this[1];
+        };
     }
 }
 
-function received_diff_text(response) {
-    let diff_text = response.responseText;
-
-    console.log(`Dostalem diffa`);
-    let server_url = "https://movedetector.pl/moved-blocks"
-    GM_xmlhttpRequest({
-        method: "POST",
-        url: server_url,
-        headers: {
-            "Content-Type": "application/json"
-        },
-        data: JSON.stringify({'diff_text': diff_text}),
-        onload: highlights_changes,
-    });
-
-}
-
-function highlights_changes(response) {
-    console.log(`MAM detected blocks`);
-    let detected_blocks = JSON.parse(response.responseText);
-    if (detected_blocks) {
-        insertDetectedBlockCssClass();
-    }
-
-    console.log("Highlighting blocks");
-    let loading_animation = document.querySelector("#detected_moves_loading_animation");
-    loading_animation.style.display = "none";
-    let counter = document.querySelector("#detected_moves_counter");
-    counter.innerText = detected_blocks.length;
-    counter.style.display = "inline-block";
-
-    for (const iter of detected_blocks.entries()) {
-        let [block_index, detected_block] = iter;
-        highlightDetectedBlock(block_index, detected_block);
-    }
-    correct_marker_heights();
-    console.log("Done");
+async function main() {
+    await patch_diff_match_patch_lib();
+    timer = setInterval(detect_moves, 5000);
 }
 
 (function() {
