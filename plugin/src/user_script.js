@@ -243,15 +243,15 @@ function is_proper_page(){
 }
 
 function get_diff_url(url){
-	let regex = /https:\/\/github\.com\/(?<user_name>\w+)\/(?<repo_name>\w+)\/pull\/(?<pull_number>\d+)(?:\/commits\/(?<commit_hash>\w+))?/g;
+	let regex = /https:\/\/github\.com\/(\w+)\/(\w+)\/pull\/(\d+)(?:\/commits\/(\w+))?/g;
 	let match = regex.exec(url);
     if (!match){
   	    return null;
     }
-    let user_name = match.groups.user_name;
-    let repo_name = match.groups.repo_name;
-    let pull_number = match.groups.pull_number;
-    let commit_hash = match.groups.commit_hash;
+    let user_name = match[1];
+    let repo_name = match[2];
+    let pull_number = match[3];
+    let commit_hash = match[4];
     if (commit_hash === undefined) {
   	    return `https://patch-diff.githubusercontent.com/raw/${user_name}/${repo_name}/pull/${pull_number}.diff`
     } else {
