@@ -9,15 +9,28 @@ from unidiff import PatchSet
 from fuzzyset import FuzzySet
 
 
+def filepath(patched_file):
+    """Return target path as this is convinient to use in GitHub"""
+    if patched_file.source_file.startswith('a/') and patched_file.target_file.startswith('b/'):
+        filepath = patched_file.target_file[2:]
+    elif patched_file.source_file.startswith('a/') and patched_file.target_file == '/dev/null':
+        filepath = patched_file.source_file[2:]
+    elif patched_file.target_file.startswith('b/') and patched_file.source_file == '/dev/null':
+        filepath = patched_file.target_file[2:]
+    else:
+        filepath = patched_file.source_file
+    return filepath
+
+
 def diff_to_added_and_removed_lines(diff_text):
     patch = PatchSet(diff_text)
     added_lines = []
     removed_lines = []
     for patched_file in patch:
+        file = filepath(patched_file)
         for hunk in patched_file:
             for line in hunk:
                 leading_whitespace, trim_text = split_to_leading_whitespace_and_trim_text(line.value.rstrip('\n'))
-                file = patched_file.path
                 if line.is_added:
                     line_no = line.target_line_no
                     lines_list = added_lines
