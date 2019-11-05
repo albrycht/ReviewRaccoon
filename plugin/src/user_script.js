@@ -20,13 +20,31 @@ const REMOVED_DATA_TYPE_ATTR = "deletion";
 const ADDED_DATA_TYPE_ATTR = "addition";
 const ALL_COLORS = ['#058DC7', '#50B432', '#ED561B', '#DDDF00', '#24CBE5', '#64E572', '#FF9655', '#FFF263', '#6AF9C4',
                     'red', 'orange', 'green', 'blue', 'purple', 'brown'];
+const DETECTED_MOVED_BLOCK_STYLE = '\
+.detectedMovedBlock { \n\
+    height: 100%;\n\
+    cursor: pointer;\n\
+    display: block;\n\
+    width: 10px;\n\
+    float: right;\n\
+    position: relative;\n\
+    left: 10px;\n\
+    margin-bottom: -300px;\n\
+    padding-bottom: 300px;\n\
+}\n\
+\n\
+.blob-code {\n\
+    overflow: hidden\n\
+}';
+
+
 
 var timer = null;
 
 function insertDetectedBlockCssClass(){
     const style = document.createElement('style');
     style.type = 'text/css';
-    style.innerHTML = '.detectedMovedBlock { display: block; width: 10px; float: right; position: relative; left: 10px;}';
+    style.innerHTML = DETECTED_MOVED_BLOCK_STYLE;
     document.getElementsByTagName('head')[0].appendChild(style);
 }
 
@@ -39,17 +57,6 @@ function getLine(item) {
     const text = item.getAttribute("data-original-line").substring(1); //substring(1) to remove leading - or +
     const line_no = parseInt(item.getAttribute("data-line"), 10);
     return new Line(file, line_no, text);
-}
-
-function correct_marker_heights(){
-    console.log("Correcting heights");
-    let markers = document.querySelectorAll(".detectedMovedBlock");
-
-    for (const block_marker of markers) {
-        let parent_height = block_marker.parentNode.clientHeight;
-        block_marker.style.height = parent_height + "px";
-    }
-    console.log("heights done");
 }
 
 function markLine(line, line_in_block_index, detected_block_index, data_type, is_first_line, is_last_line, replace_html_content, alt_msg) {
@@ -68,9 +75,7 @@ function markLine(line, line_in_block_index, detected_block_index, data_type, is
     block_marker.innerHTML = ' ';
     block_marker.id = `${id_prefix}-${data_type}`;
     block_marker.className = "detectedMovedBlock";
-    block_marker.style.height = "10px";
     block_marker.style.backgroundColor = block_color;
-    block_marker.style.cursor = "pointer";
     block_marker.title = alt_msg;
     block_marker.onclick = function() {document.querySelector(`#${id_prefix}-${oposite_data_type}`).scrollIntoView(true); window.scrollBy(0, -103)};
     insertAfter(block_marker, add_comment_button_elem);
@@ -276,7 +281,6 @@ function highlights_changes(response) {
         let [block_index, detected_block] = iter;
         highlightDetectedBlock(block_index, detected_block);
     }
-    correct_marker_heights();
     console.log("Done");
 }
 
