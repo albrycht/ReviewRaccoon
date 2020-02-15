@@ -8,34 +8,8 @@ const ALL_COLORS = ['#058DC7', '#50B432', '#ED561B', '#DDDF00', '#24CBE5', '#64E
 var timer = null;
 var moves_detected = false;
 
-function insertDetectedBlockCssClass(){
-    const style = document.createElement('style');
-    style.type = 'text/css';
-    style.innerHTML = '.detectedMovedBlock { display: block; width: 10px; float: right; position: relative; left: 10px;}';
-    // TODO this was already changed in user_script - but it eliminates duplicates. Is it good?
-    document.getElementsByTagName('head')[0].appendChild(style);
-}
-
 function insertAfter(newNode, referenceNode) {
     referenceNode.parentNode.insertBefore(newNode, referenceNode.nextSibling);
-}
-
-function getLine(item) {
-    const file = item.getAttribute("data-path");
-    const text = item.getAttribute("data-original-line").substring(1); //substring(1) to remove leading - or +
-    const line_no = parseInt(item.getAttribute("data-line"), 10);
-    return new Line(file, line_no, text);
-}
-
-function correct_marker_heights(){
-    console.log("Correcting heights");
-    let markers = document.querySelectorAll(".detectedMovedBlock");
-
-    for (const block_marker of markers) {
-        let parent_height = block_marker.parentNode.clientHeight;
-        block_marker.style.height = parent_height + "px";
-    }
-    console.log("heights done");
 }
 
 function markLine(line, line_in_block_index, detected_block_index, data_type, is_first_line, is_last_line, replace_html_content, alt_msg) {
@@ -54,9 +28,7 @@ function markLine(line, line_in_block_index, detected_block_index, data_type, is
     block_marker.innerHTML = ' ';
     block_marker.id = `${id_prefix}-${data_type}`;
     block_marker.className = "detectedMovedBlock";
-    block_marker.style.height = "10px";
     block_marker.style.backgroundColor = block_color;
-    block_marker.style.cursor = "pointer";
     block_marker.title = alt_msg;
     block_marker.onclick = function() {document.querySelector(`#${id_prefix}-${oposite_data_type}`).scrollIntoView(true); window.scrollBy(0, -103)};
     insertAfter(block_marker, add_comment_button_elem);
@@ -247,10 +219,6 @@ function get_repo_params_from_url(url){
 
 function highlights_changes(detected_blocks) {
     console.log(`Received detected blocks`);
-    //let detected_blocks = JSON.parse(response.responseText);
-    if (detected_blocks) {
-        insertDetectedBlockCssClass();
-    }
 
     let loading_animation = document.querySelector("#detected_moves_loading_animation");
     if (loading_animation !== null) {
@@ -266,7 +234,6 @@ function highlights_changes(detected_blocks) {
         let [block_index, detected_block] = iter;
         highlightDetectedBlock(block_index, detected_block);
     }
-    correct_marker_heights();
     moves_detected = true;
     console.log("Done");
 }
@@ -316,7 +283,6 @@ async function detect_moves(){
     let min_lines_count = min_lines_count_el === null ? get_min_lines_count_or_default() : parseFloat(document.querySelector("#min-lines-count").value);
     console.log(`Starting detection: >${min_lines_count}<`);
     if (min_lines_count >= 0) {
-        // let diff_url = get_diff_url(window.location.href);
         let repo_params = get_repo_params_from_url(window.location.href);
         console.log(`Sending message to background script with params: ${repo_params}`);
         chrome.runtime.sendMessage(

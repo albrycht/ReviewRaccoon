@@ -1,0 +1,15 @@
+.detectedMovedBlock {
+    height: 100%;
+    display: block;
+    width: 10px;
+    float: right;
+    position: relative;
+    left: 10px;
+    cursor: pointer;
+    margin-bottom: -300px;
+    padding-bottom: 301px; /* 1 px more then negative margin makes many blocks not collapse into 1*/
+}
+
+.blob-code {
+    overflow: hidden;
+}
