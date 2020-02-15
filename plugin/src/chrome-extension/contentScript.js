@@ -12,6 +12,7 @@ function insertDetectedBlockCssClass(){
     const style = document.createElement('style');
     style.type = 'text/css';
     style.innerHTML = '.detectedMovedBlock { display: block; width: 10px; float: right; position: relative; left: 10px;}';
+    // TODO this was already changed in user_script - but it eliminates duplicates. Is it good?
     document.getElementsByTagName('head')[0].appendChild(style);
 }
 
@@ -77,8 +78,6 @@ function get_diff_part_as_html(diff_op, text, diff_op_to_skip){
     }
     return text;
 }
-
-
 
 function highlightDetectedBlock(block_index, detected_block) {
     for (const iter of detected_block.lines.entries()) {
@@ -211,14 +210,6 @@ async function expand_large_diffs(){
     }
 }
 
-async function clear_old_block_markers() {
-    let detected_blocks_markers = document.querySelectorAll(".detectedMovedBlock");
-    for (const detected_blocks_marker of detected_blocks_markers) {
-        detected_blocks_marker.parentNode.removeChild(detected_blocks_marker);
-    }
-}
-
-
 async function wait_for_page_load() {
     let count = 1;
     let i = 0;
@@ -235,22 +226,23 @@ function is_proper_page(){
     return window.location.href.match(url_regex);
 }
 
-function get_diff_url(url){
-	let regex = /https:\/\/github\.com\/(?<user_name>\w+)\/(?<repo_name>\w+)(\/pull\/(?<pull_number>\d+))?(?:\/commits?\/(?<commit_hash>\w+))?/g
-	let match = regex.exec(url);
+function get_repo_params_from_url(url){
+    let regex = /https:\/\/github\.com\/(?<user_name>\w+)\/(?<repo_name>\w+)(\/pull\/(?<pull_number>\d+))?(?:\/commits?\/(?<commit_hash>\w+))?/g;
+    let match = regex.exec(url);
     if (!match){
-        console.lgo("It doesn't work!")
+        console.log(`Could not extract user_name from url: ${url}`)
   	    return null;
     }
     let user_name = match.groups.user_name;
     let repo_name = match.groups.repo_name;
     let pull_number = match.groups.pull_number;
     let commit_hash = match.groups.commit_hash;
-    if (commit_hash === undefined) {
-  	    return `https://patch-diff.githubusercontent.com/raw/${user_name}/${repo_name}/pull/${pull_number}.diff`
-    } else {
-        return `https://github.com/${user_name}/${repo_name}/commit/${commit_hash}.diff`
-    }
+    return {
+        'user_name': user_name,
+        'repo_name': repo_name,
+        'pull_number': pull_number,
+        'commit_hash': commit_hash,
+    };
 }
 
 function highlights_changes(detected_blocks) {
@@ -291,21 +283,15 @@ async function send_http_post_to_detect_moved_blocks(data) {
     return await response.json();
 }
 
-async function get_diff_from_github_api(diff_url) {
-    const response = await fetch(diff_url, {
-        method: 'GET',
-        headers: {
-            "Content-Type": "text/plain",
-            'mode': 'no-cors'
-        },
-    });
-    return await response.text();
-}
+
 
 function received_diff_text(diff_text) {
-    console.log(`Dostalem diffa ${diff_text}`);
-    let server_url = "https://movedetector.pl/moved-blocks";
-    let data = {'diff_text': diff_text}
+    console.log(`Dostalem diffa: ${diff_text}`);
+    if (!diff_text) {
+        console.log("Empty diff.");
+        return;
+    }
+    let data = {'diff_text': diff_text};
     send_http_post_to_detect_moved_blocks(data)
         .then((resp_data) => {highlights_changes(resp_data)})
 }
@@ -330,35 +316,23 @@ async function detect_moves(){
     let min_lines_count = min_lines_count_el === null ? get_min_lines_count_or_default() : parseFloat(document.querySelector("#min-lines-count").value);
     console.log(`Starting detection: >${min_lines_count}<`);
     if (min_lines_count >= 0) {
-        let diff_url = get_diff_url(window.location.href);
-        console.log(`Sending request to: ${diff_url}`);
-        get_diff_from_github_api(diff_url)
-            .then((diff_text) => {received_diff_text(diff_text)})
+        // let diff_url = get_diff_url(window.location.href);
+        let repo_params = get_repo_params_from_url(window.location.href);
+        console.log(`Sending message to background script with params: ${repo_params}`);
+        chrome.runtime.sendMessage(
+            {contentScriptQuery: "diff_text", github_params: repo_params},
+            (diff_text) => {received_diff_text(diff_text)}
+        );
     } else {
         console.log("min_lines_count is smaller then 0 - detection disabled.");
     }
 }
 
-async function patch_diff_match_patch_lib(){
-    // For more information see: https://github.com/google/diff-match-patch/issues/39
-    // if (typeof Symbol === 'function') {
-    //     diff_match_patch.Diff.prototype[Symbol.iterator] = function* () {
-    //       yield this[0];
-    //       yield this[1];
-    //     };
-    // }
-}
-
 async function main() {
-    await patch_diff_match_patch_lib();
     timer = setInterval(detect_moves, 5000);
 }
 
 main();
-//(function() {
-//    'use strict';
-//    main();
-//})();
 
 // Example PR:
 // https://github.com/StarfishStorage/ansible/pull/219/files

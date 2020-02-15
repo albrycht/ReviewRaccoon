@@ -2,7 +2,7 @@
 	"name": "Review Raccoon Extension",
 	"version": "0.1",
 	"description": "This extension will show you moved blocks of code on GitHub Pull Requests",
-	"permissions": ["storage", "https://movedetector.pl/", "https://patch-diff.githubusercontent.com/"],
+	"permissions": ["storage", "https://movedetector.pl/", "https://*.githubusercontent.com/"],
 	"background": {
 	  "scripts": ["background.js"],
 	  "persistent": false
