@@ -1,0 +1,33 @@
+{
+	"name": "Review Raccoon Extension",
+	"version": "0.1",
+	"description": "This extension will show you moved blocks of code on GitHub Pull Requests",
+	"permissions": ["storage", "https://movedetector.pl/", "https://patch-diff.githubusercontent.com/"],
+	"background": {
+	  "scripts": ["background.js"],
+	  "persistent": false
+	},
+	"page_action": {
+	  "default_popup": "popup.html",
+	  "default_icon": {
+		"16": "images/raccoon_16.png",
+		"32": "images/raccoon_32.png",
+		"48": "images/raccoon_48.png",
+		"128": "images/raccoon_128.png"
+	  }
+	},
+	"icons": {
+		"16": "images/raccoon_16.png",
+		"32": "images/raccoon_32.png",
+		"48": "images/raccoon_48.png",
+		"128": "images/raccoon_128.png"
+	},
+	"content_scripts": [
+	  {
+		"matches": ["https://github.com/*"],
+		"css": ["style.css"],
+		"js": ["diff_match_patch.js", "fuzzyset.js", "contentScript.js"]
+	  }
+	],
+	"manifest_version": 2
+}
