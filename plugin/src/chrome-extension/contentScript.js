@@ -234,33 +234,7 @@ function highlights_changes(detected_blocks) {
         let [block_index, detected_block] = iter;
         highlightDetectedBlock(block_index, detected_block);
     }
-    moves_detected = true;
     console.log("Done");
-}
-
-async function send_http_post_to_detect_moved_blocks(data) {
-    let server_url = "https://movedetector.pl/moved-blocks";
-    const response = await fetch(server_url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-    });
-    return await response.json();
-}
-
-
-
-function received_diff_text(diff_text) {
-    console.log(`Dostalem diffa: ${diff_text}`);
-    if (!diff_text) {
-        console.log("Empty diff.");
-        return;
-    }
-    let data = {'diff_text': diff_text};
-    send_http_post_to_detect_moved_blocks(data)
-        .then((resp_data) => {highlights_changes(resp_data)})
 }
 
 async function detect_moves(){
@@ -282,12 +256,13 @@ async function detect_moves(){
     let min_lines_count_el = document.querySelector("#min-lines-count");
     let min_lines_count = min_lines_count_el === null ? get_min_lines_count_or_default() : parseFloat(document.querySelector("#min-lines-count").value);
     console.log(`Starting detection: >${min_lines_count}<`);
+    moves_detected = true;
     if (min_lines_count >= 0) {
         let repo_params = get_repo_params_from_url(window.location.href);
         console.log(`Sending message to background script with params: ${repo_params}`);
         chrome.runtime.sendMessage(
             {contentScriptQuery: "diff_text", github_params: repo_params},
-            (diff_text) => {received_diff_text(diff_text)}
+            (detected_blocks) => {highlights_changes(detected_blocks)}
         );
     } else {
         console.log("min_lines_count is smaller then 0 - detection disabled.");

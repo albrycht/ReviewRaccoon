@@ -26,9 +26,21 @@ chrome.runtime.onMessage.addListener(
             'mode': 'no-cors',
         }
       })
-          .then(response => response.text())
-          .then(diff_text => sendResponse(diff_text))
-          .catch(error => console.log(`Received error: ${error}`));
+        .then(response => response.text())
+        .then((diff_text) => {
+          console.log(`Received diff text. Length: ${diff_text.length}`);
+          console.log(`Sending diff to movedetector.pl to detect moved blocks.`);
+          return fetch("https://movedetector.pl/moved-blocks", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({'diff_text': diff_text})
+          })
+        })
+        .then(response => response.json())
+        .then(detected_blocks => sendResponse(detected_blocks))
+        .catch(error => console.log(`Received error while getting diff: ${error}`));
       return true;
     }
   }
