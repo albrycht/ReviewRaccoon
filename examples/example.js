@@ -94,6 +94,14 @@ app.use(catchErrors(async function (request, response, next) {
   next()
 }));
 
+// Catch 405 and forward to error handler
+app.use(function (request, response, next) {
+  const err = new Error(translate('errorMessage405Route', response.locals.currentLocale.code));
+  // New added lines are also not a problem
+  err.status = 405;
+  next(err)
+});
+
 // Test space connection and attach space related data for views if possible
 app.use(catchErrors(async function (request, response, next) {
   // Catch misconfigured space credentials and display settings page
@@ -140,13 +148,6 @@ app.use(breadcrumb());
 // Initialize the route handling
 // Check ./routes/index.js to get a list of all implemented routes
 app.use('/', routes);
-
-// Catch 404 and forward to error handler
-app.use(function (request, response, next) {
-  const err = new Error(translate('errorMessage404Route', response.locals.currentLocale.code));
-  err.status = 404;
-  next(err)
-});
 
 // Error handler
 app.use(function (err, request, response, next) {
