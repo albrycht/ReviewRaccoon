@@ -65,7 +65,7 @@
       git:
         repo: "https://albrycht:{{ git_repo_password | urlencode }}@github.com/albrycht/MoveBlockDetector.git"
         dest: "{{ movedetector_repo }}"
-        version: dev  # BRANCH NAME - TODO change to master
+        version: master
 
     - name: Install python prerequisites
       apt: name=software-properties-common state=present
@@ -125,8 +125,11 @@
         - { regexp: '^VENV_PATH=', line: 'VENV_PATH={{ movedetector_venv }}' }
 
   - include_tasks: setup-nginx.yaml
+    tags: nginx
   - include_tasks: setup-supervisor.yaml
+    tags: supervisor
   - include_tasks: setup-certbot.yaml
+    tags: certbot
 
   - name: Ensure movedetector.log file
     file:

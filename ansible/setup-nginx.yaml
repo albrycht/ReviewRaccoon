@@ -6,20 +6,38 @@
       state: latest
       update_cache: yes
 
-  - name: save nginx config
-    template: src=templates/nginx_config dest=/etc/nginx/sites-available/movedetector.conf
+  - name: save nginx config for movedetector.pl
+    template: src=templates/nginx_config_movedetector dest=/etc/nginx/sites-available/movedetector.conf
 
-  - name: Create symlink to enable nginx config
+  - name: save nginx config for reviewraccoon.com
+    template: src=templates/nginx_config_reviewraccoon dest=/etc/nginx/sites-available/reviewraccoon.conf
+
+  - name: Create symlink to enable nginx config movedetector.pl
     file:
       src: /etc/nginx/sites-available/movedetector.conf
       dest: /etc/nginx/sites-enabled/movedetector.conf
       state: link
 
+  - name: Create symlink to enable nginx config reviewraccoon.com
+    file:
+      src: /etc/nginx/sites-available/reviewraccoon.conf
+      dest: /etc/nginx/sites-enabled/reviewraccoon.conf
+      state: link
+
+  - name: Create symlink to nginx access log
+    file:
+      src: /var/log/nginx/access.log
+      dest: "{{ movedetector_log }}/nginx_access.log"
+      state: link
+
+  - name: Create symlink to nginx error log
+    file:
+      src: /var/log/nginx/error.log
+      dest: "{{ movedetector_log }}/nginx_error.log"
+      state: link
+
   - name: reload nginx
     service: name=nginx state=reloaded
-
-  # TODO link to nginx logs from ~/logs dir
-  # nginx has 2 files /var/log/nginx/access.log   and   /var/log/nginx/error.log
 
 #  - name: Allow connections on port 80 in firewall      TODO looks like this is not working - done manually on droplet
 #    raw: sudo ufw allow 80
