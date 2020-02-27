@@ -1,3 +1,5 @@
+// Code from: https://github.com/contentful/the-example-app.nodejs/blob/master/app.js
+
 const path = require('path');
 
 const bodyParser = require('body-parser');
