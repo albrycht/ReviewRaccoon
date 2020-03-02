@@ -10,12 +10,14 @@
       state: latest
       update_cache: yes
 
+  - name: Create and install cert for reviewraccoon.com
+    raw: sudo certbot --nginx -n -d reviewraccoon.com --agree-tos --email michalalbrycht@gmail.com --expand
+
+  - name: Create and install cert for movedetector.pl
+    raw: sudo certbot --nginx -n -d movedetector.pl --agree-tos --email michalalbrycht@gmail.com --expand
+
   - name: reload nginx
     service: name=nginx state=reloaded
-
-  - name: Create and install cert
-    # TODO add domain www.movedetector.pl
-    raw: sudo certbot --nginx -n -d movedetector.pl --agree-tos --email michalalbrycht@gmail.com
 
   - name: Add cronjob for cert renewal
     cron:

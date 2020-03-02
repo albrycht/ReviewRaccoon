@@ -7,10 +7,18 @@
       update_cache: yes
 
   - name: save nginx config for movedetector.pl
-    template: src=templates/nginx_config_movedetector dest=/etc/nginx/sites-available/movedetector.conf
+    template:
+      src: templates/nginx_config.j2
+      dest: /etc/nginx/sites-available/movedetector.conf
+    vars:
+      domain: movedetector.pl
 
   - name: save nginx config for reviewraccoon.com
-    template: src=templates/nginx_config_reviewraccoon dest=/etc/nginx/sites-available/reviewraccoon.conf
+    template:
+      src: templates/nginx_config.j2
+      dest: /etc/nginx/sites-available/reviewraccoon.conf
+    vars:
+      domain: reviewraccoon.com
 
   - name: Create symlink to enable nginx config movedetector.pl
     file:
