@@ -1,6 +1,5 @@
 import json
-import time
-from contextlib import contextmanager
+from textwrap import dedent
 
 import falcon
 
@@ -14,9 +13,26 @@ class CustomJsonEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
+class MainPageResource(object):
+    def on_get(self, req, resp):
+        resp.content_type = 'text/html'
+        resp.body = dedent("""
+            <html>
+                <head>
+                </head>
+                <body>
+                    <h1>ReviewRaccoon</h1>
+                    <br/>
+                    <br/>
+                    <br/>
+                    <h3>WORK IN PROGRESS</h3>
+                </body>
+            </html>
+            """)
+
+
 class MovedBlocksResource(object):
     def on_get(self, req, resp):
-        """Handles GET requests"""
         resp.body = json.dumps({"message": "Hello world!"})
 
     def on_post(self, req, resp):
@@ -33,8 +49,8 @@ class MovedBlocksResource(object):
 
 def create_api():
     api = falcon.API()
-    moved_blocks = MovedBlocksResource()
-    api.add_route('/moved-blocks', moved_blocks)
+    api.add_route('/', MainPageResource())
+    api.add_route('/moved-blocks', MovedBlocksResource())
     return api
 
 
