@@ -41,14 +41,19 @@ function markLine(line, line_in_block_index, detected_block_index, data_type, is
     }
 }
 
+function escape_html_markup(text){
+    return text.replace("<", "&lt;")
+}
+
+
 function get_diff_part_as_html(diff_op, text, diff_op_to_skip){
     if (diff_op === diff_op_to_skip){
         return '';
     }
     if (diff_op === 1 || diff_op === -1) {
-        return `<span class='x'>${text}</span>`;
+        return `<span class='x'>${escape_html_markup(text)}</span>`;
     }
-    return text;
+    return escape_html_markup(text);
 }
 
 function highlightDetectedBlock(block_index, detected_block) {
@@ -199,7 +204,7 @@ function is_proper_page(){
 }
 
 function get_repo_params_from_url(url){
-    let regex = /https:\/\/github\.com\/(?<user_name>\w+)\/(?<repo_name>\w+)(\/pull\/(?<pull_number>\d+))?(?:\/commits?\/(?<commit_hash>\w+))?/g;
+    let regex = /https:\/\/github\.com\/(?<user_name>[^/]+)\/(?<repo_name>[^/]+)(\/pull\/(?<pull_number>\d+))?(?:\/commits?\/(?<commit_hash>\w+))?/g;
     let match = regex.exec(url);
     if (!match){
         console.log(`Could not extract user_name from url: ${url}`)
