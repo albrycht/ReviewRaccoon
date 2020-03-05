@@ -29,8 +29,8 @@ chrome.runtime.onMessage.addListener(
         .then(response => response.text())
         .then((diff_text) => {
           console.log(`Received diff text. Length: ${diff_text.length}`);
-          console.log(`Sending diff to movedetector.pl to detect moved blocks.`);
-          return fetch("https://movedetector.pl/moved-blocks", {
+          console.log(`Sending diff to ReviewRaccoon.com to detect moved blocks.`);
+          return fetch("https://reviewraccoon.com/moved-blocks", {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

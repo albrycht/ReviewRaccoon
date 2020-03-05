@@ -1,5 +1,0 @@
-server {
-    listen 80;
-    server_name reviewraccoon.com www.reviewraccoon.com;
-    rewrite ^/$ https://github.com/albrycht/ReviewRaccoon redirect;
-}
