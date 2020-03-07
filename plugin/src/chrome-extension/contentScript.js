@@ -5,8 +5,8 @@ const ADDED_DATA_TYPE_ATTR = "addition";
 const ALL_COLORS = ['#058DC7', '#50B432', '#ED561B', '#DDDF00', '#24CBE5', '#64E572', '#FF9655', '#FFF263', '#6AF9C4',
                     'red', 'orange', 'green', 'blue', 'purple', 'brown'];
 
-var timer = null;
-var moves_detected = false;
+let timer = null;
+let moves_detected = false;
 
 function insertAfter(newNode, referenceNode) {
     referenceNode.parentNode.insertBefore(newNode, referenceNode.nextSibling);
@@ -88,7 +88,7 @@ function highlightDetectedBlock(block_index, detected_block) {
 }
 
 function htmlToElement(html) {
-    var template = document.createElement('template');
+    let template = document.createElement('template');
     html = html.trim(); // Never return a text node of whitespace as the result
     template.innerHTML = html;
     return template.content.firstChild;
@@ -112,21 +112,23 @@ function add_detect_moved_blocks_button() {
     if (button_container === null) {
         return  // TODO this is workaround - you should add proper box for this button!
     }
-    let loading_animation = htmlToElement(
-    `<div id="detected_moves_loading_animation" style="display: inline-block;">` +
-    `<svg version="1.1" id="L4" x="0px" y="0px" viewBox="0 0 100 100" enable-background="new 0 0 0 0" ` +
-    `    style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" ` +
-    `>` +
-    `  <circle fill="#000" stroke="none" cx="6" cy="50" r="8">` +
-    `    <animate attributeName="opacity" dur="1s" values="0;1;0" repeatCount="indefinite" begin="0.1"></animate>` +
-    `  </circle>` +
-    `  <circle fill="#000" stroke="none" cx="36" cy="50" r="8">` +
-    `    <animate attributeName="opacity" dur="1s" values="0;1;0" repeatCount="indefinite" begin="0.2"></animate>` +
-    `  </circle>` +
-    `  <circle fill="#000" stroke="none" cx="66" cy="50" r="8">` +
-    `    <animate attributeName="opacity" dur="1s" values="0;1;0" repeatCount="indefinite" begin="0.3"></animate>` +
-    `  </circle>` +
-    `</svg></div>`);
+    console.log("add_detect_button: 1");
+    let loading_animation = htmlToElement(`
+    <div id="detected_moves_loading_animation" style="display: inline-block;">
+      <svg version="1.1" id="L4" x="0px" y="0px" viewBox="0 0 100 100" enable-background="new 0 0 0 0" 
+        style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" 
+      >
+        <circle fill="#000" stroke="none" cx="6" cy="50" r="8">
+          <animate attributeName="opacity" dur="1s" values="0;1;0" repeatCount="indefinite" begin="0.1"></animate>
+        </circle>
+        <circle fill="#000" stroke="none" cx="36" cy="50" r="8">
+          <animate attributeName="opacity" dur="1s" values="0;1;0" repeatCount="indefinite" begin="0.2"></animate>
+        </circle>
+        <circle fill="#000" stroke="none" cx="66" cy="50" r="8">
+          <animate attributeName="opacity" dur="1s" values="0;1;0" repeatCount="indefinite" begin="0.3"></animate>
+        </circle>
+      </svg>
+    </div>`);
     let details = document.createElement("details");
     details.className = "diffbar-item details-reset details-overlay position-relative text-center";
 
@@ -148,21 +150,20 @@ function add_detect_moved_blocks_button() {
     let popover = document.createElement("div");
     popover.className = "Popover js-diff-settings mt-2 pt-1";
     popover.style.left = "-62px";
-    popover.innerHTML = `` +
-        `<div class="Popover-message text-left p-3 mx-auto Box box-shadow-large col-6">\n` +
-        `    <form action="${window.location.href}" accept-charset="UTF-8" method="get">\n` +
-        `        <h4 class="mb-2">Detection settings</h4>\n` +
-        `        <label for="min-lines-count" class="text-normal" style="float: left; line-height: 25px;">Min lines in block</label>\n` +
-        `        <input type="number" step="any" name="min-lines-count" value="${min_lines_count}" id="min-lines-count" style="width: 30px; text-align: right; float: right;">\n` +
-        `        <p class="text-normal text-gray-light" style="clear: both">Value \< 0 disables detection.</p>\n` +
-        `        <button class="btn btn-primary btn-sm col-12 mt-3" type="submit" id="detect-button">Apply and reload</button>\n` +
-        `    </form>\n` +
-        `</div>`;
+    popover.innerHTML = `
+        <div class="Popover-message text-left p-3 mx-auto Box box-shadow-large col-6">\n
+            <form action="${window.location.href}" accept-charset="UTF-8" method="get">\n
+                <h4 class="mb-2">Detection settings</h4>\n
+                <label for="min-lines-count" class="text-normal" style="float: left; line-height: 25px;">Min lines in block</label>\n
+                <input type="number" step="any" name="min-lines-count" value="${min_lines_count}" id="min-lines-count" style="width: 30px; text-align: right; float: right;">\n
+                <p class="text-normal text-gray-light" style="clear: both">Value \< 0 disables detection.</p>\n
+                <button class="btn btn-primary btn-sm col-12 mt-3" type="submit" id="detect-button">Apply and reload</button>\n
+            </form>\n
+        </div>`;
     details.appendChild(popover);
     let detect_button = details.querySelector("#detect-button");
 
     detect_button.addEventListener('click', function() {
-
         let min_lines_count = parseFloat(document.querySelector("#min-lines-count").value);
         console.log(`Starting detection: >${min_lines_count}<`);
         localStorage.setItem('detect-moved-blocks__min-lines-count', min_lines_count);
@@ -189,11 +190,9 @@ async function expand_large_diffs(){
 
 async function wait_for_page_load() {
     let count = 1;
-    let i = 0;
     while (count > 0) {
         count = document.querySelectorAll("div.js-diff-progressive-container include-fragment.diff-progressive-loader").length;
         await sleep(100);
-        i += 1;
     }
     await sleep(1000);  // just in case
 }
@@ -204,16 +203,19 @@ function is_proper_page(){
 }
 
 function get_repo_params_from_url(url){
-    let regex = /https:\/\/github\.com\/(?<user_name>[^/]+)\/(?<repo_name>[^/]+)(\/pull\/(?<pull_number>\d+))?(?:\/commits?\/(?<commit_hash>\w+))?/g;
+    // firefox does not support named groups
+    //                                   user     repo              pull_no              commit_hash
+    let regex = /https:\/\/github\.com\/([^/]+)\/([^/]+)(?:\/pull\/(\d+))?(?:\/commits?\/(\w+))?/g;
     let match = regex.exec(url);
     if (!match){
-        console.log(`Could not extract user_name from url: ${url}`)
+        console.log(`Could not extract user_name from url: ${url}`);
   	    return null;
     }
-    let user_name = match.groups.user_name;
-    let repo_name = match.groups.repo_name;
-    let pull_number = match.groups.pull_number;
-    let commit_hash = match.groups.commit_hash;
+    let user_name = match[1];
+    let repo_name = match[2];
+    let pull_number = match[3];
+    let commit_hash = match[4];
+
     return {
         'user_name': user_name,
         'repo_name': repo_name,
@@ -243,17 +245,14 @@ function highlights_changes(detected_blocks) {
 }
 
 async function detect_moves(){
+    if (detect_moved_block_button_exists() || moves_detected){
+        return
+    }
     if (!is_proper_page()){
         return
     }
-
-    if (detect_moved_block_button_exists()){
-        return
-    }
-
-    if (moves_detected){
-        return
-    }
+    moves_detected = true;
+    clearInterval(timer);
 
     await add_detect_moved_blocks_button();
     await wait_for_page_load();
@@ -261,10 +260,9 @@ async function detect_moves(){
     let min_lines_count_el = document.querySelector("#min-lines-count");
     let min_lines_count = min_lines_count_el === null ? get_min_lines_count_or_default() : parseFloat(document.querySelector("#min-lines-count").value);
     console.log(`Starting detection: >${min_lines_count}<`);
-    moves_detected = true;
     if (min_lines_count >= 0) {
         let repo_params = get_repo_params_from_url(window.location.href);
-        console.log(`Sending message to background script with params: ${repo_params}`);
+        console.log(`Sending message to background script with params: ${JSON.stringify(repo_params)}`);
         chrome.runtime.sendMessage(
             {contentScriptQuery: "diff_text", github_params: repo_params},
             (detected_blocks) => {highlights_changes(detected_blocks)}
@@ -275,7 +273,7 @@ async function detect_moves(){
 }
 
 async function main() {
-    timer = setInterval(detect_moves, 5000);
+    timer = setInterval(detect_moves, 3000);
 }
 
 main();
