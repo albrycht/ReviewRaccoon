@@ -6,7 +6,7 @@ const ALL_COLORS = ['#058DC7', '#50B432', '#ED561B', '#DDDF00', '#24CBE5', '#64E
                     'red', 'orange', 'green', 'blue', 'purple', 'brown'];
 
 let timer = null;
-let moves_detected = false;
+let detection_started = false;
 
 function insertAfter(newNode, referenceNode) {
     referenceNode.parentNode.insertBefore(newNode, referenceNode.nextSibling);
@@ -202,28 +202,6 @@ function is_proper_page(){
     return window.location.href.match(url_regex);
 }
 
-function get_repo_params_from_url(url){
-    // firefox does not support named groups
-    //                                   user     repo              pull_no              commit_hash
-    let regex = /https:\/\/github\.com\/([^/]+)\/([^/]+)(?:\/pull\/(\d+))?(?:\/commits?\/(\w+))?/g;
-    let match = regex.exec(url);
-    if (!match){
-        console.log(`Could not extract user_name from url: ${url}`);
-  	    return null;
-    }
-    let user_name = match[1];
-    let repo_name = match[2];
-    let pull_number = match[3];
-    let commit_hash = match[4];
-
-    return {
-        'user_name': user_name,
-        'repo_name': repo_name,
-        'pull_number': pull_number,
-        'commit_hash': commit_hash,
-    };
-}
-
 function highlights_changes(detected_blocks) {
     console.log(`Received detected blocks`);
 
@@ -245,14 +223,13 @@ function highlights_changes(detected_blocks) {
 }
 
 async function detect_moves(){
-    if (detect_moved_block_button_exists() || moves_detected){
+    if (detect_moved_block_button_exists() || detection_started){
         return
     }
     if (!is_proper_page()){
         return
     }
-    moves_detected = true;
-    clearInterval(timer);
+    detection_started = true;
 
     await add_detect_moved_blocks_button();
     await wait_for_page_load();
@@ -261,10 +238,10 @@ async function detect_moves(){
     let min_lines_count = min_lines_count_el === null ? get_min_lines_count_or_default() : parseFloat(document.querySelector("#min-lines-count").value);
     console.log(`Starting detection: >${min_lines_count}<`);
     if (min_lines_count >= 0) {
-        let repo_params = get_repo_params_from_url(window.location.href);
-        console.log(`Sending message to background script with params: ${JSON.stringify(repo_params)}`);
+        let page_url = window.location.href;
+        console.log(`Sending message to background script with url: ${page_url}`);
         chrome.runtime.sendMessage(
-            {contentScriptQuery: "diff_text", github_params: repo_params},
+            {contentScriptQuery: "diff_text", url: page_url},
             (detected_blocks) => {highlights_changes(detected_blocks)}
         );
     } else {

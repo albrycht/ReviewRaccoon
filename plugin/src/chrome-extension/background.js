@@ -4,7 +4,8 @@
 
 'use strict';
 
-function get_diff_url(repo_params){
+function get_diff_url(page_url){
+  let repo_params = get_repo_params_from_url(page_url);
   if (repo_params.commit_hash === undefined) {
     return `https://patch-diff.githubusercontent.com/raw/${repo_params.user_name}/${repo_params.repo_name}/pull/${repo_params.pull_number}.diff`
   } else {
@@ -12,12 +13,34 @@ function get_diff_url(repo_params){
   }
 }
 
+function get_repo_params_from_url(url){
+    // firefox does not support named groups
+    //                                   user     repo              pull_no              commit_hash
+    let regex = /https:\/\/github\.com\/([^/]+)\/([^/]+)(?:\/pull\/(\d+))?(?:\/commits?\/(\w+))?/g;
+    let match = regex.exec(url);
+    if (!match){
+        console.log(`Could not extract user_name from url: ${url}`);
+  	    return null;
+    }
+    let user_name = match[1];
+    let repo_name = match[2];
+    let pull_number = match[3];
+    let commit_hash = match[4];
+
+    return {
+        'user_name': user_name,
+        'repo_name': repo_name,
+        'pull_number': pull_number,
+        'commit_hash': commit_hash,
+    };
+}
+
 chrome.runtime.onMessage.addListener(
   function(request, sender, sendResponse) {
     if (request.contentScriptQuery === "diff_text") {
-      console.log(`Received message '${request.contentScriptQuery}' with params: ${JSON.stringify(request.github_params)}`);
+      console.log(`Received message '${request.contentScriptQuery}' with params: ${JSON.stringify(request.url)}`);
 
-      let diff_url = get_diff_url(request.github_params);
+      let diff_url = get_diff_url(request.url);
       console.log(`Requesting url: ${diff_url}`);
       fetch(diff_url, {
         method: 'GET',
@@ -35,7 +58,7 @@ chrome.runtime.onMessage.addListener(
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({'diff_text': diff_text})
+            body: JSON.stringify({'diff_text': diff_text, 'repo_params': request.github_params})
           })
         })
         .then(response => response.json())
