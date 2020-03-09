@@ -38,9 +38,9 @@ function get_repo_params_from_url(url){
 chrome.runtime.onMessage.addListener(
   function(request, sender, sendResponse) {
     if (request.contentScriptQuery === "diff_text") {
-      console.log(`Received message '${request.contentScriptQuery}' with params: ${JSON.stringify(request.url)}`);
+      console.log(`Received message '${request.contentScriptQuery}' with params: ${JSON.stringify(request.pull_request_url)} from user ${JSON.stringify(request.user_profile_url)}`);
 
-      let diff_url = get_diff_url(request.url);
+      let diff_url = get_diff_url(request.pull_request_url);
       console.log(`Requesting url: ${diff_url}`);
       fetch(diff_url, {
         method: 'GET',
@@ -58,7 +58,7 @@ chrome.runtime.onMessage.addListener(
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({'diff_text': diff_text, 'repo_params': request.github_params})
+            body: JSON.stringify({'diff_text': diff_text, 'pull_request_url': request.pull_request_url, 'user_profile_url': request.user_profile_url})
           })
         })
         .then(response => response.json())

@@ -239,9 +239,10 @@ async function detect_moves(){
     console.log(`Starting detection: >${min_lines_count}<`);
     if (min_lines_count >= 0) {
         let page_url = window.location.href;
+        let user_profile_link = document.querySelector("a.user-profile-link").href;
         console.log(`Sending message to background script with url: ${page_url}`);
         chrome.runtime.sendMessage(
-            {contentScriptQuery: "diff_text", url: page_url},
+            {contentScriptQuery: "diff_text", pull_request_url: page_url, user_profile_url: user_profile_link},
             (detected_blocks) => {highlights_changes(detected_blocks)}
         );
     } else {
