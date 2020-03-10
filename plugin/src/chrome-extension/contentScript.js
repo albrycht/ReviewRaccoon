@@ -14,7 +14,7 @@ function insertAfter(newNode, referenceNode) {
 
 function markLine(line, line_in_block_index, detected_block_index, data_type, is_first_line, is_last_line, replace_html_content, alt_msg) {
     const button_selector_prefix = data_type === REMOVED_DATA_TYPE_ATTR ? REMOVED_LINES_SELECTOR : ADDED_LINES_SELECTOR;
-    const add_comment_button_selector = button_selector_prefix +`[data-path="${line.file}"][data-line="${line.line_no}"][data-type="${data_type}"]`;
+    const add_comment_button_selector = button_selector_prefix +`[data-path="${line.file}"][data-line="${line.line_no}"]`;
     let add_comment_button_elem = document.querySelector(add_comment_button_selector);
     let parent_node = add_comment_button_elem.parentNode;
     let id_prefix = `detected-block-${detected_block_index}-${line_in_block_index}`;
@@ -112,7 +112,6 @@ function add_detect_moved_blocks_button() {
     if (button_container === null) {
         return  // TODO this is workaround - you should add proper box for this button!
     }
-    console.log("add_detect_button: 1");
     let loading_animation = htmlToElement(`
     <div id="detected_moves_loading_animation" style="display: inline-block;">
       <svg version="1.1" id="L4" x="0px" y="0px" viewBox="0 0 100 100" enable-background="new 0 0 0 0" 
@@ -155,7 +154,7 @@ function add_detect_moved_blocks_button() {
             <form action="${window.location.href}" accept-charset="UTF-8" method="get">\n
                 <h4 class="mb-2">Detection settings</h4>\n
                 <label for="min-lines-count" class="text-normal" style="float: left; line-height: 25px;">Min lines in block</label>\n
-                <input type="number" step="any" name="min-lines-count" value="${min_lines_count}" id="min-lines-count" style="width: 30px; text-align: right; float: right;">\n
+                <input type="number" step="any" name="min-lines-count" value="${min_lines_count}" id="min-lines-count" style="width: 45px; text-align: right; float: right;">\n
                 <p class="text-normal text-gray-light" style="clear: both">Value \< 0 disables detection.</p>\n
                 <button class="btn btn-primary btn-sm col-12 mt-3" type="submit" id="detect-button">Apply and reload</button>\n
             </form>\n
@@ -239,10 +238,15 @@ async function detect_moves(){
     console.log(`Starting detection: >${min_lines_count}<`);
     if (min_lines_count >= 0) {
         let page_url = window.location.href;
-        let user_profile_link = document.querySelector("a.user-profile-link").href;
+
+        let user_profile_link_node = document.querySelector("a.user-profile-link");
+        let user_profile_url = null;
+        if (user_profile_link_node){
+            user_profile_url = user_profile_link_node.href;
+        }
         console.log(`Sending message to background script with url: ${page_url}`);
         chrome.runtime.sendMessage(
-            {contentScriptQuery: "diff_text", pull_request_url: page_url, user_profile_url: user_profile_link},
+            {contentScriptQuery: "diff_text", pull_request_url: page_url, user_profile_url: user_profile_url},
             (detected_blocks) => {highlights_changes(detected_blocks)}
         );
     } else {

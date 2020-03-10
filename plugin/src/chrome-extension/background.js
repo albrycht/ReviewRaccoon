@@ -1,6 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
+
 
 'use strict';
 
@@ -11,7 +9,7 @@ function get_diff_url(page_url){
   } else {
     return `https://github.com/${repo_params.user_name}/${repo_params.repo_name}/commit/${repo_params.commit_hash}.diff`
   }
-}
+};
 
 function get_repo_params_from_url(url){
     // firefox does not support named groups
@@ -33,7 +31,7 @@ function get_repo_params_from_url(url){
         'pull_number': pull_number,
         'commit_hash': commit_hash,
     };
-}
+};
 
 chrome.runtime.onMessage.addListener(
   function(request, sender, sendResponse) {
