@@ -5,11 +5,11 @@
 function get_diff_url(page_url){
   let repo_params = get_repo_params_from_url(page_url);
   if (repo_params.commit_hash === undefined) {
-    return `https://patch-diff.githubusercontent.com/raw/${repo_params.user_name}/${repo_params.repo_name}/pull/${repo_params.pull_number}.diff`
+    return `https://github.com/${repo_params.user_name}/${repo_params.repo_name}/pull/${repo_params.pull_number}.diff`
   } else {
     return `https://github.com/${repo_params.user_name}/${repo_params.repo_name}/commit/${repo_params.commit_hash}.diff`
   }
-};
+}
 
 function get_repo_params_from_url(url){
     // firefox does not support named groups
@@ -31,7 +31,7 @@ function get_repo_params_from_url(url){
         'pull_number': pull_number,
         'commit_hash': commit_hash,
     };
-};
+}
 
 chrome.runtime.onMessage.addListener(
   function(request, sender, sendResponse) {
