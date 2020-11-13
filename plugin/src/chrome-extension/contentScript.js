@@ -57,6 +57,11 @@ function get_diff_part_as_html(diff_op, text, diff_op_to_skip){
 }
 
 function highlightDetectedBlock(block_index, detected_block) {
+    let block_match_weight = 0;
+    for (const iter of detected_block.lines.entries()) {
+        let [line_in_block_index, matching_lines] = iter;
+        block_match_weight += matching_lines.match_probability;
+    }
     for (const iter of detected_block.lines.entries()) {
         let [line_in_block_index, matching_lines] = iter;
         let removed_line = matching_lines.removed_line;
@@ -77,7 +82,7 @@ function highlightDetectedBlock(block_index, detected_block) {
         }
         let is_first_line = line_in_block_index === 0;
         let is_last_line = line_in_block_index === detected_block.lines.length - 1;
-        let alt_msg = `Line match: ${match_probability}. Block match: ${detected_block.weighted_lines_count}`;
+        let alt_msg = `Block index: ${block_index} Block match: ${block_match_weight.toFixed(2)} Line match: ${match_probability.toFixed(2)}`;
         if (removed_line) {
             markLine(removed_line, line_in_block_index, block_index, REMOVED_DATA_TYPE_ATTR, is_first_line, is_last_line, removed_line_html, alt_msg);
         }
@@ -246,7 +251,7 @@ async function detect_moves(){
         }
         console.log(`Sending message to background script with url: ${page_url}`);
         chrome.runtime.sendMessage(
-            {contentScriptQuery: "diff_text", pull_request_url: page_url, user_profile_url: user_profile_url},
+            {contentScriptQuery: "diff_text", pull_request_url: page_url, user_profile_url: user_profile_url, min_lines_count: min_lines_count},
             (detected_blocks) => {highlights_changes(detected_blocks)}
         );
     } else {

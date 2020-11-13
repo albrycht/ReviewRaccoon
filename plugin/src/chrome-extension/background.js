@@ -56,7 +56,12 @@ chrome.runtime.onMessage.addListener(
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({'diff_text': diff_text, 'pull_request_url': request.pull_request_url, 'user_profile_url': request.user_profile_url})
+            body: JSON.stringify({
+                'diff_text': diff_text,
+                'pull_request_url': request.pull_request_url,
+                'user_profile_url': request.user_profile_url,
+                'min_lines_count': request.min_lines_count
+            })
           })
         })
         .then(response => response.json())
