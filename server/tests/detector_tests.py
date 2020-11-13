@@ -281,51 +281,51 @@ class MovedBlocksDetectorTest(unittest.TestCase):
         self.assertEqual(len(detected_blocks), 1)
         self.assertEqual(detected_blocks[0].line_count(), 3)
 
-    def test_check_starfish_ansible_code_moved(self):
+    def test_check_XXX_ansible_code_moved(self):
         removed_lines = ChangedLines("file_with_removed_lines", {
             1: "  - name: add ubuntu toolchain test PPA with gcc-7",
             2: "    apt_repository: repo='ppa:ubuntu-toolchain-r/test'",
             3: "",
-            4: "  - name: install Starfish-compiled Pythons",
+            4: "  - name: install project-compiled Pythons",
             5: "    apt: name={{ item }} state=latest update_cache=true allow_unauthenticated=true",
             6: "    with_items:",
             7: "      # when installing Python module which requires compilation step, Python will use the same",
             8: "      # compiler command as the one use to compile Python. On Ubuntu Python is compiled with gcc-7, so",
             9: "      # gcc-7 is needed, otherwise packages requiring compilation won't install (e.g. cryptography).",
             10: "      - gcc-7",
-            11: "      - sf-python27",
-            12: "      - sf-python36",
-            13: "      - sf-python36-shared",
+            11: "      - python27",
+            12: "      - python36",
+            13: "      - python36-shared",
             14: "",
             15: "  - name: create symlink /usr/local/bin/python3.6",
             16: "    file:",
-            17: "      src: /opt/starfish/python3.6/bin/python3.6",
+            17: "      src: /opt/project/python3.6/bin/python3.6",
             18: "      dest: /usr/local/bin/python3.6",
             19: "      state: link",
             21: "",
         })
 
         added_lines = ChangedLines("file_with_added_lines", {
-            11: "    - name: add Starfish misc repo",
+            11: "    - name: add project misc repo",
             12: "      apt_repository:",
-            13: "        repo: \"deb https://starfishstorage.bintray.com/starfish_misc_apt {{ ansible_distribution_release }} non-free\"",
+            13: "        repo: \"deb https://someurl.com/project_misc_apt {{ ansible_distribution_release }} non-free\"",
             14: "        state: present",
-            15: "        filename: starfish-misc",
+            15: "        filename: project-misc",
             16: "",
-            17: "    - name: install Starfish-compiled Pythons",
+            17: "    - name: install project-compiled Pythons",
             18: "      apt: name={{ item }} state=latest update_cache=true",
             19: "      with_items:",
             20: "        # when installing Python module which requires compilation step, Python will use the same",
             21: "        # compiler command as the one use to compile Python. On Ubuntu Python is compiled with gcc-7, so",
             22: "        # gcc-7 is needed, otherwise packages requiring compilation won't install (e.g. cryptography).",
             23: "        - gcc-7",
-            24: "        - sf-python27",
-            25: "        - sf-python36",
-            26: "        - sf-python36-shared",
+            24: "        - python27",
+            25: "        - python36",
+            26: "        - python36-shared",
             27: "",
             28: "    - name: create symlink /usr/local/bin/python3.6",
             29: "      file:",
-            30: "        src: /opt/starfish/python3.6/bin/python3.6",
+            30: "        src: /opt/project/python3.6/bin/python3.6",
             31: "        dest: /usr/local/bin/python3.6",
             32: "        state: link",
         })
@@ -720,7 +720,7 @@ class MovedBlocksDetectorTest(unittest.TestCase):
 
         detector = MovedBlocksDetector(removed_lines.to_lines_dicts(), added_lines1.to_lines_dicts() + added_lines2.to_lines_dicts())
         detected_blocks = detector.detect_moved_blocks()
-        self.assertEqual(len(detected_blocks), 2)
+        self.assertEqual(len(detected_blocks), 2)  # TODO fix this test
         # self.assertEqual(detected_blocks[0].first_removed_line.line_no, 1)
         # self.assertEqual(detected_blocks[0].last_removed_line.line_no, 12)
         # self.assertEqual(detected_blocks[0].first_added_line.line_no, 1)

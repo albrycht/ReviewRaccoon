@@ -264,12 +264,3 @@ async function main() {
 }
 
 main();
-
-// Example PR:
-// https://github.com/StarfishStorage/ansible/pull/219/files
-// https://github.com/StarfishStorage/starfish/pull/5305
-// https://github.com/StarfishStorage/starfish/pull/5313
-// https://github.com/albrycht/MoveBlockDetector/pull/1/files
-
-// Experimental (commit but no in PR):
-// https://github.com/albrycht/MoveBlockDetector/commit/cfda9c26d37145d57f19198a46bc02461b968325
