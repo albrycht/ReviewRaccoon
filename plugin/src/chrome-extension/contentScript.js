@@ -1,9 +1,9 @@
-const ADDED_LINES_SELECTOR = "td.blob-code-addition > button.add-line-comment";
-const REMOVED_LINES_SELECTOR = "td.blob-code-deletion > button.add-line-comment";
-const REMOVED_DATA_TYPE_ATTR = "deletion";
-const ADDED_DATA_TYPE_ATTR = "addition";
+const REMOVED = "removed";
+const ADDED = "added";
 const ALL_COLORS = ['#058DC7', '#50B432', '#ED561B', '#DDDF00', '#24CBE5', '#64E572', '#FF9655', '#FFF263', '#6AF9C4',
                     'red', 'orange', 'green', 'blue', 'purple', 'brown'];
+
+let filepath_to_anchor = {};
 
 let timer = null;
 let detection_started = false;
@@ -12,16 +12,46 @@ function insertAfter(newNode, referenceNode) {
     referenceNode.parentNode.insertBefore(newNode, referenceNode.nextSibling);
 }
 
-function markLine(line, line_in_block_index, detected_block_index, data_type, is_first_line, is_last_line, replace_html_content, alt_msg) {
-    const button_selector_prefix = data_type === REMOVED_DATA_TYPE_ATTR ? REMOVED_LINES_SELECTOR : ADDED_LINES_SELECTOR;
-    const add_comment_button_selector = button_selector_prefix +`[data-path="${line.file}"][data-line="${line.line_no}"]`;
-    let add_comment_button_elem = document.querySelector(add_comment_button_selector);
-    let parent_node = add_comment_button_elem.parentNode;
+function get_anchor_for_filepath(filepath) {
+    if (filepath in filepath_to_anchor) {
+        return filepath_to_anchor[filepath]
+    }
+
+    let file_header = document.querySelector(`.file-header[data-path="${filepath}"`)
+    if (file_header === null) {
+        console.log(`Could not find file-header for path: ${filepath}`)
+        return null
+    } else {
+        let anchor = file_header.getAttribute('data-anchor')
+        filepath_to_anchor[filepath] = anchor
+        return anchor
+
+    }
+}
+
+function get_line_node(line, is_removed) {
+    let anchor = get_anchor_for_filepath(line.file)
+    if (anchor === null) {
+        return null
+    }
+    node_id = anchor + (is_removed ? 'L' : 'R') + line.line_no;
+    node = document.getElementById(node_id);
+    node = node.nextElementSibling;  // nextElementSibling because id points to td with line number
+    if (node.classList.contains('empty-cell')) {
+        // in unified view (unified == non-split) there is extra column between line number and line content -> skip it
+        node = node.nextElementSibling;
+    }
+    return node
+}
+
+function markLine(line, line_in_block_index, detected_block_index, is_removed, is_first_line, is_last_line, replace_html_content, alt_msg) {
+    let line_node = get_line_node(line, is_removed);
     let id_prefix = `detected-block-${detected_block_index}-${line_in_block_index}`;
-    let oposite_data_type = data_type === REMOVED_DATA_TYPE_ATTR ? ADDED_DATA_TYPE_ATTR : REMOVED_DATA_TYPE_ATTR;
+    let data_type = is_removed ? REMOVED : ADDED;
+    let oposite_data_type = is_removed ? ADDED : REMOVED;
     let block_color = ALL_COLORS[detected_block_index % ALL_COLORS.length];
 
-    let line_content_elem = parent_node.querySelector('.blob-code-inner.blob-code-marker');
+    let line_content_elem = line_node.querySelector('.blob-code-inner.blob-code-marker');
     line_content_elem.innerHTML = replace_html_content;
 
     const block_marker = document.createElement('a');
@@ -31,13 +61,13 @@ function markLine(line, line_in_block_index, detected_block_index, data_type, is
     block_marker.style.backgroundColor = block_color;
     block_marker.title = alt_msg;
     block_marker.onclick = function() {document.querySelector(`#${id_prefix}-${oposite_data_type}`).scrollIntoView(true); window.scrollBy(0, -103)};
-    insertAfter(block_marker, add_comment_button_elem);
+    line_node.prepend(block_marker);
 
     if (is_first_line) {
-        parent_node.style.borderTop = `solid 1px ${block_color}`;
+        line_node.style.borderTop = `solid 1px ${block_color}`;
     }
     if (is_last_line) {
-        parent_node.style.borderBottom = `solid 1px ${block_color}`;
+        line_node.style.borderBottom = `solid 1px ${block_color}`;
     }
 }
 
@@ -84,10 +114,10 @@ function highlightDetectedBlock(block_index, detected_block) {
         let is_last_line = line_in_block_index === detected_block.lines.length - 1;
         let alt_msg = `Block index: ${block_index} Block match: ${block_match_weight.toFixed(2)} Line match: ${match_probability.toFixed(2)}`;
         if (removed_line) {
-            markLine(removed_line, line_in_block_index, block_index, REMOVED_DATA_TYPE_ATTR, is_first_line, is_last_line, removed_line_html, alt_msg);
+            markLine(removed_line, line_in_block_index, block_index, true, is_first_line, is_last_line, removed_line_html, alt_msg);
         }
         if (added_line) {
-            markLine(added_line, line_in_block_index, block_index, ADDED_DATA_TYPE_ATTR, is_first_line, is_last_line, added_line_html, alt_msg)
+            markLine(added_line, line_in_block_index, block_index, false, is_first_line, is_last_line, added_line_html, alt_msg)
         }
     }
 }
