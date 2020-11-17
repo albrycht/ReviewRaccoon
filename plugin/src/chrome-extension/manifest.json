@@ -1,6 +1,6 @@
 {
 	"name": "ReviewRaccoon",
-	"version": "0.72",
+	"version": "0.73",
 	"description": "This extension will detect and show you moved lines of code on GitHub Pull Requests",
 	"permissions": [
 		"https://reviewraccoon.com/*",

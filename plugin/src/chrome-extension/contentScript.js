@@ -274,7 +274,7 @@ async function detect_moves(){
         let page_url = window.location.href;
 
         let user_img_node = document.querySelector("header > div.Header-item > details > summary > img");
-        let user = null;
+        let user_name = null;
         if (user_img_node){
             user_name = user_img_node.alt;
         }
