@@ -334,11 +334,6 @@ class MovedBlocksDetectorTest(unittest.TestCase):
         detected_blocks = detector.detect_moved_blocks()
         self.assertEqual(len(detected_blocks), 1)
 
-        # for (detected_block of detected_blocks) {
-        #   line0 = detected_block.lines[0];
-        #   console.log(`Removed: ${line0.removed_line.line_no}-${detected_block.last_removed_line.line_no}   ` +
-        #               `Added: ${line0.added_line.line_no}-${detected_block.last_added_line.line_no}`);
-        # }
         self.assertEqual(detected_blocks[0].lines[0].removed_line.line_no, 4)
         self.assertEqual(detected_blocks[0].last_removed_line.line_no, 19)
         self.assertEqual(detected_blocks[0].lines[0].added_line.line_no, 17)

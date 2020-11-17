@@ -237,7 +237,7 @@ function is_proper_page(){
 }
 
 function highlights_changes(detected_blocks) {
-    console.log(`Received detected blocks`);
+    console.log(`Received ${detected_blocks.length} detected blocks`);
 
     let loading_animation = document.querySelector("#detected_moves_loading_animation");
     if (loading_animation !== null) {
@@ -253,7 +253,6 @@ function highlights_changes(detected_blocks) {
         let [block_index, detected_block] = iter;
         highlightDetectedBlock(block_index, detected_block);
     }
-    console.log("Done");
 }
 
 async function detect_moves(){
@@ -270,17 +269,15 @@ async function detect_moves(){
     await expand_large_diffs();
     let min_lines_count_el = document.querySelector("#min-lines-count");
     let min_lines_count = min_lines_count_el === null ? get_min_lines_count_or_default() : parseFloat(document.querySelector("#min-lines-count").value);
-    console.log(`Starting detection: >${min_lines_count}<`);
+    console.log(`Starting detection: min_lines_count=${min_lines_count}`);
     if (min_lines_count >= 0) {
         let page_url = window.location.href;
 
         let user_img_node = document.querySelector("header > div.Header-item > details > summary > img");
         let user = null;
         if (user_img_node){
-            console.log("Inside link node");
             user_name = user_img_node.alt;
         }
-        console.log(`Sending message to background script with url: ${page_url}. User: ${user_name}`);
         chrome.runtime.sendMessage(
             {contentScriptQuery: "diff_text", pull_request_url: page_url, user_name: user_name, min_lines_count: min_lines_count},
             (detected_blocks) => {highlights_changes(detected_blocks)}
