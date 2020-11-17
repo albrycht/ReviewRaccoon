@@ -36,7 +36,7 @@ function get_repo_params_from_url(url){
 chrome.runtime.onMessage.addListener(
   function(request, sender, sendResponse) {
     if (request.contentScriptQuery === "diff_text") {
-      console.log(`Received message '${request.contentScriptQuery}' with params: ${JSON.stringify(request.pull_request_url)} from user ${JSON.stringify(request.user_profile_url)}`);
+      console.log(`Received message '${request.contentScriptQuery}' with params: ${JSON.stringify(request.pull_request_url)} from user ${JSON.stringify(request.user_name)}`);
 
       let diff_url = get_diff_url(request.pull_request_url);
       console.log(`Requesting url: ${diff_url}`);
@@ -59,7 +59,7 @@ chrome.runtime.onMessage.addListener(
             body: JSON.stringify({
                 'diff_text': diff_text,
                 'pull_request_url': request.pull_request_url,
-                'user_profile_url': request.user_profile_url,
+                'user_name': request.user_name,
                 'min_lines_count': request.min_lines_count
             })
           })

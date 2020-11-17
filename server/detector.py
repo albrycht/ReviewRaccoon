@@ -1,6 +1,6 @@
 import json
+import logging
 from collections import defaultdict
-from enum import Enum
 from textwrap import dedent
 from typing import List, Dict
 
@@ -8,6 +8,8 @@ from unidiff import PatchSet
 
 from fuzzyset import FuzzySet
 from time_utils import measure_fun_time
+
+logger = logging.getLogger(__name__)
 
 
 def filepath(patched_file):
@@ -475,5 +477,5 @@ class MovedBlocksDetector(object):
 
         detected_blocks = self.join_nearby_blocks(detected_blocks)
         filtered_blocks = self.filter_blocks(detected_blocks, min_lines_count)
-        print(f'Detected {len(filtered_blocks)} blocks ({len(detected_blocks) - len(filtered_blocks)} filtered)')
+        logger.info(f'Detected {len(filtered_blocks)} blocks ({len(detected_blocks) - len(filtered_blocks)} filtered)')
         return filtered_blocks

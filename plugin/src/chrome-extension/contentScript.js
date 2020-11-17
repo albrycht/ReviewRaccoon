@@ -274,14 +274,15 @@ async function detect_moves(){
     if (min_lines_count >= 0) {
         let page_url = window.location.href;
 
-        let user_profile_link_node = document.querySelector("a.user-profile-link");
-        let user_profile_url = null;
-        if (user_profile_link_node){
-            user_profile_url = user_profile_link_node.href;
+        let user_img_node = document.querySelector("header > div.Header-item > details > summary > img");
+        let user = null;
+        if (user_img_node){
+            console.log("Inside link node");
+            user_name = user_img_node.alt;
         }
-        console.log(`Sending message to background script with url: ${page_url}`);
+        console.log(`Sending message to background script with url: ${page_url}. User: ${user_name}`);
         chrome.runtime.sendMessage(
-            {contentScriptQuery: "diff_text", pull_request_url: page_url, user_profile_url: user_profile_url, min_lines_count: min_lines_count},
+            {contentScriptQuery: "diff_text", pull_request_url: page_url, user_name: user_name, min_lines_count: min_lines_count},
             (detected_blocks) => {highlights_changes(detected_blocks)}
         );
     } else {

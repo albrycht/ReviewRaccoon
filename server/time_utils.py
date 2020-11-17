@@ -1,5 +1,8 @@
 import functools
+import logging
 import time
+
+logger = logging.getLogger(__name__)
 
 
 class MeasureTime:
@@ -19,7 +22,7 @@ class MeasureTime:
 
     def report(self, duration):
         stat_name = self._stat_name
-        print(f"{stat_name} took {duration:.3f} seconds")
+        logger.debug(f"{stat_name} took {duration:.3f} seconds")
 
 
 def measure_fun_time():

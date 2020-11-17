@@ -131,16 +131,16 @@
   - include_tasks: setup-certbot.yaml
     tags: certbot
 
-  - name: Ensure movedetector.log file
+  - name: Ensure reviewraccoon.log file
     file:
-      path: '{{ movedetector_repo }}/server/movedetector.log'
+      path: '{{ movedetector_repo }}/server/reviewraccoon.log'
       state: touch
       mode: 0750
       owner: movedetector
 
   - name: Create log file symlink in log directory
     file:
-      src: '{{ movedetector_repo }}/server/movedetector.log'
-      dest: '{{ movedetector_log }}/movedetector.log'
+      src: '{{ movedetector_repo }}/server/reviewraccoon.log'
+      dest: '{{ movedetector_log }}/reviewraccoon.log'
       state: link
       owner: movedetector
