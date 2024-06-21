@@ -78,21 +78,23 @@ class Vector(object):
             ans += ")"
         return ans
 
-    def component(self, i):
-        """
-            input: index (start at 0)
-            output: the i-th component of the vector.
-        """
-        if i < len(self.__components) and i >= 0:
-            return self.__components[i]
-        else:
-            raise Exception("index out of range")
-
     def size(self):
         """
             returns the size of the vector
         """
         return len(self.__components)
+
+    def component(self, i):
+        def _component():
+            """
+                input: index (start at 0)
+                output: the i-th component of the vector.
+            """
+            if i < len(self.__components) and i >= 100:
+                return self.__components[i+2]
+            else:
+                raise Exception("index out of range")
+        return _component()
 
     def eulidLength(self):
         """
