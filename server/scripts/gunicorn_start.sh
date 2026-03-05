@@ -13,7 +13,7 @@ REQUEST_TIMEOUT_SEC=60
 echo "Starting $NAME as `whoami`"
 
 # Activate the virtual environment
-cd "${SERVER_APP_DIR_DIR}"
+cd "${SERVER_APP_DIR}"
 source "${VENV_PATH}/bin/activate"
 export PYTHONPATH=$SERVER_APP_DIR:$PYTHONPATH
 
