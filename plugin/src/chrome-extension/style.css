@@ -13,3 +13,39 @@
 .blob-code {
     overflow: hidden;
 }
+
+.rr-inline-status {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.35;
+    text-align: left;
+    max-width: 300px;
+}
+
+.rr-inline-status-info {
+    color: #57606a;
+}
+
+.rr-inline-status-success {
+    color: #1a7f37;
+}
+
+.rr-inline-status-error {
+    color: #cf222e;
+}
+
+.rr-help-legend {
+    margin-top: 6px;
+    text-align: left;
+    font-size: 12px;
+    color: #57606a;
+}
+
+.rr-help-legend summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.rr-help-legend p {
+    margin: 4px 0 0;
+}

@@ -21,6 +21,7 @@ let filepath_to_anchor = {};
 
 let timer = null;
 let detection_started = false;
+let auto_detection_done = false;
 
 function insertAfter(newNode, referenceNode) {
     referenceNode.parentNode.insertBefore(newNode, referenceNode.nextSibling);
@@ -193,7 +194,7 @@ function get_line_node(line, is_removed) {
 function markLine(line, line_in_block_index, detected_block_index, is_removed, is_first_line, is_last_line, replace_html_content, alt_msg) {
     let line_node = get_line_node(line, is_removed);
     if (!line_node) {
-        return;
+        return false;
     }
     let id_prefix = `detected-block-${detected_block_index}-${line_in_block_index}`;
     let data_type = is_removed ? REMOVED : ADDED;
@@ -211,7 +212,7 @@ function markLine(line, line_in_block_index, detected_block_index, is_removed, i
     }
 
     if (!line_content_elem) {
-        return;
+        return false;
     }
     line_content_elem.innerHTML = replace_html_content;
 
@@ -230,6 +231,7 @@ function markLine(line, line_in_block_index, detected_block_index, is_removed, i
     if (is_last_line) {
         line_node.style.borderBottom = `solid 1px ${block_color}`;
     }
+    return true;
 }
 
 function escape_html_markup(text) {
@@ -248,6 +250,7 @@ function get_diff_part_as_html(diff_op, text, diff_op_to_skip) {
 }
 
 function highlightDetectedBlock(block_index, detected_block) {
+    let marked_lines_count = 0;
     let block_match_weight = 0;
     for (const iter of detected_block.lines.entries()) {
         let [line_in_block_index, matching_lines] = iter;
@@ -273,14 +276,22 @@ function highlightDetectedBlock(block_index, detected_block) {
         }
         let is_first_line = line_in_block_index === 0;
         let is_last_line = line_in_block_index === detected_block.lines.length - 1;
-        let alt_msg = `Block index: ${block_index} Block match: ${block_match_weight.toFixed(2)} Line match: ${match_probability.toFixed(2)}`;
+        let average_match = detected_block.lines.length > 0
+            ? (block_match_weight / detected_block.lines.length) * 100
+            : 0;
+        let alt_msg = `Moved block ${block_index + 1}. Approximate similarity ${average_match.toFixed(0)}%. Click marker to jump to matching location.`;
         if (removed_line) {
-            markLine(removed_line, line_in_block_index, block_index, true, is_first_line, is_last_line, removed_line_html, alt_msg);
+            if (markLine(removed_line, line_in_block_index, block_index, true, is_first_line, is_last_line, removed_line_html, alt_msg)) {
+                marked_lines_count += 1;
+            }
         }
         if (added_line) {
-            markLine(added_line, line_in_block_index, block_index, false, is_first_line, is_last_line, added_line_html, alt_msg)
+            if (markLine(added_line, line_in_block_index, block_index, false, is_first_line, is_last_line, added_line_html, alt_msg)) {
+                marked_lines_count += 1;
+            }
         }
     }
+    return marked_lines_count;
 }
 
 function htmlToElement(html) {
@@ -296,46 +307,144 @@ function detect_moved_block_button_exists() {
 }
 
 function get_min_lines_count_or_default() {
-    let min_lines_count = localStorage.getItem('detect-moved-blocks__min-lines-count');
-    if (min_lines_count === null || isNaN(min_lines_count)) {
-        min_lines_count = 2;
-    }
-    return min_lines_count
+    return new Promise((resolve) => {
+        chrome.storage.local.get(['detect-moved-blocks__min-lines-count'], (result) => {
+            let min_lines_count = parseFloat(result['detect-moved-blocks__min-lines-count']);
+            if (Number.isNaN(min_lines_count)) {
+                min_lines_count = 2;
+            }
+            resolve(min_lines_count);
+        });
+    });
 }
 
-let button_container = null;
+function update_background_state(state) {
+    chrome.runtime.sendMessage(
+        {
+            contentScriptQuery: "update_tab_state",
+            state: state,
+        },
+        () => {
+            // Ignore disconnected background errors during navigation/unload.
+            void chrome.runtime.lastError;
+        }
+    );
+}
 
-if (is_new_view()) {
-    // Inject into the new toolbar
-    // Look for the "Review changes" / "Submit review" button container
-    // Try class first
-    let reviewButton = document.querySelector('button[class*="ReviewMenuButton-module__ReviewMenuButton"]');
-    // Fallback based on text if class approach fails
-    if (!reviewButton) {
-        let buttons = document.querySelectorAll('button');
-        for (let btn of buttons) {
-            if (btn.textContent.includes('Submit review') || btn.textContent.includes('Review changes')) {
-                reviewButton = btn;
-                break;
+const FIRST_RUN_HINT_STORAGE_KEY = "reviewraccoon__first_run_hint_shown";
+
+function get_detect_button_refs() {
+    return {
+        button: document.querySelector("#detect_moved_blocks"),
+        label: document.querySelector("#detect_moved_blocks_label"),
+        counter: document.querySelector("#detected_moves_counter"),
+        loading: document.querySelector("#detected_moves_loading_animation"),
+        status: document.querySelector("#detected_moves_status"),
+    };
+}
+
+function set_detect_button_state(state, payload = {}) {
+    let refs = get_detect_button_refs();
+    if (!refs.button) {
+        return;
+    }
+
+    let count = Number.isFinite(payload.count) ? payload.count : 0;
+    let message = payload.message || "";
+    refs.button.disabled = state === "running";
+
+    if (refs.loading) {
+        refs.loading.style.display = state === "running" ? "inline-block" : "none";
+    }
+
+    if (refs.counter) {
+        if (state === "success" || state === "no_results") {
+            refs.counter.innerText = count;
+            refs.counter.style.display = "inline-block";
+        } else {
+            refs.counter.style.display = "none";
+        }
+    }
+
+    if (refs.status) {
+        refs.status.className = "rr-inline-status";
+        if (state === "success") {
+            refs.status.classList.add("rr-inline-status-success");
+        } else if (state === "error") {
+            refs.status.classList.add("rr-inline-status-error");
+        } else {
+            refs.status.classList.add("rr-inline-status-info");
+        }
+        refs.status.textContent = message;
+        refs.status.style.display = message ? "block" : "none";
+    }
+
+    if (!refs.label) {
+        return;
+    }
+    if (state === "running") {
+        refs.label.textContent = "Detecting...";
+    } else if (state === "success") {
+        refs.label.textContent = `Found ${count}`;
+    } else if (state === "error") {
+        refs.label.textContent = "Retry detection";
+    } else if (state === "no_results") {
+        refs.label.textContent = "No moved blocks";
+    } else {
+        refs.label.textContent = "Detect moved blocks";
+    }
+}
+
+function maybe_show_first_run_hint() {
+    let shown = localStorage.getItem(FIRST_RUN_HINT_STORAGE_KEY);
+    if (shown) {
+        return;
+    }
+    set_detect_button_state("info", {
+        message: "Tip: click a marker to jump to the matching location.",
+    });
+    localStorage.setItem(FIRST_RUN_HINT_STORAGE_KEY, "1");
+}
+
+function get_user_name() {
+    let user_img_node = document.querySelector("header > div.Header-item > details > summary > img");
+    if (user_img_node) {
+        return user_img_node.alt;
+    }
+    return null;
+}
+
+function request_detected_blocks(page_url, user_name, min_lines_count) {
+    return new Promise((resolve) => {
+        chrome.runtime.sendMessage(
+            {
+                contentScriptQuery: "diff_text",
+                pull_request_url: page_url,
+                user_name: user_name,
+                min_lines_count: min_lines_count,
+            },
+            (response) => {
+                if (chrome.runtime.lastError) {
+                    resolve({
+                        ok: false,
+                        error: {
+                            phase: "precheck",
+                            reasonCode: "runtime_message_error",
+                            errorMessage: chrome.runtime.lastError.message,
+                        },
+                    });
+                    return;
+                }
+                resolve(response || { ok: false, error: { errorMessage: "No response from background." } });
             }
-        }
-    }
-
-    if (reviewButton) {
-        // Traverse up to find some container
-        // Usually it's in a div > div setup.
-        // Let's just wrap it in the direct parent if "Stack" is not strictly required
-        button_container = reviewButton.parentElement;
-
-        // Try to find the stack if possible for better alignment
-        let stack = reviewButton.closest('div[class*="Stack"]');
-        if (stack) {
-            button_container = stack;
-        }
-    }
+        );
+    });
 }
 
 async function add_detect_moved_blocks_button() {
+        if (detect_moved_block_button_exists()) {
+            return true;
+        }
         let button_container = null;
 
         if (is_new_view()) {
@@ -389,60 +498,43 @@ async function add_detect_moved_blocks_button() {
         </circle>
       </svg>
     </div>`);
-        let details = document.createElement("details");
-        // Adjust classes for new view if needed, but keeping basic classes might work if they are global.
-        // GitHub new view might not use 'diffbar-item' etc as much.
-        details.className = "diffbar-item details-reset details-overlay position-relative text-center";
+        let container = document.createElement("div");
+        container.className = "diffbar-item details-reset position-relative text-center";
         if (is_new_view()) {
-            details.style.marginRight = "8px"; // Spacing for new toolbar
-            details.style.display = "flex";
-            details.style.alignItems = "center";
+            container.style.marginRight = "8px";
+            container.style.display = "flex";
+            container.style.alignItems = "center";
         }
 
-        let carret = document.createElement("div");
-        carret.className = "dropdown-caret";
-
-
-        let summary = document.createElement("summary");
-
-        summary.className = "btn btn-sm";
-        summary.id = "detect_moved_blocks";
-        summary.appendChild(loading_animation);
-        summary.appendChild(htmlToElement('<span class="Counter" style="display: none; margin-right: 4px;" id="detected_moves_counter"></span>'));
-        summary.appendChild(htmlToElement('<span style="margin-right: 4px;">Detect moved blocks</span>'));
-        summary.appendChild(carret);
-        details.appendChild(summary);
-        let min_lines_count = get_min_lines_count_or_default();
-
-        let popover = document.createElement("div");
-        popover.className = "Popover js-diff-settings mt-2 pt-1";
-        popover.style.left = "-62px";
-        popover.style.zIndex = "100"; // Ensure visibility
-        popover.innerHTML = `
-        <div class="Popover-message text-left p-3 mx-auto Box box-shadow-large col-6">\n
-            <form action="${window.location.href}" accept-charset="UTF-8" method="get">\n
-                <h4 class="mb-2">Detection settings</h4>\n
-                <label for="min-lines-count" class="text-normal" style="float: left; line-height: 25px;">Min lines in block</label>\n
-                <input type="number" step="any" name="min-lines-count" value="${min_lines_count}" id="min-lines-count" style="width: 45px; text-align: right; float: right;">\n
-                <p class="text-normal text-gray-light" style="clear: both">Value \< 0 disables detection.</p>\n
-                <button class="btn btn-primary btn-sm col-12 mt-3" type="submit" id="detect-button">Apply and reload</button>\n
-            </form>\n
-        </div>`;
-        details.appendChild(popover);
-        let detect_button = details.querySelector("#detect-button");
-
-        detect_button.addEventListener('click', function () {
-            let min_lines_count = parseFloat(document.querySelector("#min-lines-count").value);
-            console.log(`Starting detection: >${min_lines_count}<`);
-            localStorage.setItem('detect-moved-blocks__min-lines-count', min_lines_count);
-        }, false);
+        let button = document.createElement("button");
+        button.className = "btn btn-sm";
+        button.id = "detect_moved_blocks";
+        button.type = "button";
+        button.appendChild(loading_animation);
+        button.appendChild(htmlToElement('<span class="Counter" style="display: none; margin-right: 4px;" id="detected_moves_counter"></span>'));
+        button.appendChild(htmlToElement('<span id="detect_moved_blocks_label" style="margin-right: 4px;">Detect moved blocks</span>'));
+        button.title = "Configure detection settings in the extension popup.";
+        button.addEventListener("click", () => {
+            run_detection("manual");
+        });
+        container.appendChild(button);
+        container.appendChild(htmlToElement('<div id="detected_moves_status" class="rr-inline-status rr-inline-status-info" style="display:none;"></div>'));
+        container.appendChild(
+            htmlToElement(
+                `<details id="reviewraccoon_help_legend" class="rr-help-legend">
+                    <summary>What do markers mean?</summary>
+                    <p>Colored bars mark moved blocks. Click a bar to jump to the matching location.</p>
+                </details>`
+            )
+        );
 
         if (is_new_view()) {
             // Prepend to the container to be on the left of the "Review changes" button
-            button_container.insertBefore(details, button_container.firstChild);
+            button_container.insertBefore(container, button_container.firstChild);
         } else {
-            button_container.appendChild(details);
+            button_container.appendChild(container);
         }
+        set_detect_button_state("idle", {});
         return true;
     }
 
@@ -489,50 +581,147 @@ async function add_detect_moved_blocks_button() {
             counter.style.display = "inline-block";
         }
 
+        let marked_lines_count = 0;
         for (const iter of detected_blocks.entries()) {
             let [block_index, detected_block] = iter;
-            highlightDetectedBlock(block_index, detected_block);
+            marked_lines_count += highlightDetectedBlock(block_index, detected_block);
         }
+        return marked_lines_count;
     }
 
-    async function detect_moves() {
-        if (detect_moved_block_button_exists()) {
-            return
-        }
+    async function run_detection() {
         if (detection_started) {
             return
         }
         if (!is_proper_page()) {
+            set_detect_button_state("info", {
+                message: "Open a PR files or commit page to run detection.",
+            });
+            update_background_state({
+                phase: "precheck",
+                status: "not_supported_page",
+                reasonCode: null,
+                errorMessage: null,
+                blockCount: 0,
+            });
             return
         }
-        detection_started = true;
-
         let added = await add_detect_moved_blocks_button();
         if (!added) {
-            detection_started = false;
             return;
         }
-        await wait_for_page_load();
-        await expand_large_diffs();
-        let min_lines_count_el = document.querySelector("#min-lines-count");
-        let min_lines_count = min_lines_count_el === null ? get_min_lines_count_or_default() : parseFloat(document.querySelector("#min-lines-count").value);
-        console.log(`Starting detection: min_lines_count=${min_lines_count}`);
-        if (min_lines_count >= 0) {
-            let page_url = window.location.href;
-
-            let user_img_node = document.querySelector("header > div.Header-item > details > summary > img");
-            let user_name = null;
-            if (user_img_node) {
-                user_name = user_img_node.alt;
+        detection_started = true;
+        try {
+            set_detect_button_state("running", {
+                message: "ReviewRaccoon is analyzing this diff...",
+            });
+            await wait_for_page_load();
+            await expand_large_diffs();
+            let min_lines_count = await get_min_lines_count_or_default();
+            console.log(`Starting detection: min_lines_count=${min_lines_count}`);
+            if (min_lines_count >= 0) {
+                let page_url = window.location.href;
+                let user_name = get_user_name();
+                let response = await request_detected_blocks(page_url, user_name, min_lines_count);
+                if (!response || !response.ok) {
+                    let message = "Detection failed. Open the extension popup for details.";
+                    if (response && response.error && response.error.errorMessage) {
+                        message = response.error.errorMessage;
+                    }
+                    set_detect_button_state("error", {
+                        message: message,
+                    });
+                    return;
+                }
+                try {
+                    let detected_blocks = response.detectedBlocks || [];
+                    let marked_lines_count = highlights_changes(detected_blocks);
+                    if (detected_blocks.length > 0 && marked_lines_count === 0) {
+                        update_background_state({
+                            phase: "render",
+                            subPhase: "render_dom_lookup",
+                            status: "error",
+                            reasonCode: "render_dom_lookup_failed",
+                            errorMessage: "Could not locate matching diff lines in GitHub DOM.",
+                        });
+                        set_detect_button_state("error", {
+                            message: "Could not place markers in GitHub UI. See popup details.",
+                        });
+                        return;
+                    }
+                    update_background_state({
+                        phase: "render",
+                        status: "success",
+                        blockCount: detected_blocks.length,
+                    });
+                    if (detected_blocks.length === 0) {
+                        set_detect_button_state("no_results", {
+                            count: 0,
+                            message: "No moved blocks found. Try lowering Min lines in block.",
+                        });
+                    } else {
+                        set_detect_button_state("success", {
+                            count: detected_blocks.length,
+                            message: `Found ${detected_blocks.length} moved block${detected_blocks.length === 1 ? "" : "s"}. Click markers to jump between matches.`,
+                        });
+                    }
+                } catch (error) {
+                    update_background_state({
+                        phase: "render",
+                        subPhase: "render_apply",
+                        status: "error",
+                        reasonCode: "render_apply_error",
+                        errorMessage: error && error.message ? error.message : String(error),
+                    });
+                    set_detect_button_state("error", {
+                        message: "Could not render highlights. Open popup for details.",
+                    });
+                }
+            } else {
+                console.log("min_lines_count is smaller than 0 - detection disabled.");
+                update_background_state({
+                    phase: "precheck",
+                    status: "disabled_by_settings",
+                    reasonCode: null,
+                    errorMessage: null,
+                    blockCount: 0,
+                });
+                set_detect_button_state("info", {
+                    message: "Detection is disabled in popup settings.",
+                });
             }
-            chrome.runtime.sendMessage(
-                { contentScriptQuery: "diff_text", pull_request_url: page_url, user_name: user_name, min_lines_count: min_lines_count },
-                (detected_blocks) => { highlights_changes(detected_blocks) }
-            );
-        } else {
-            console.log("min_lines_count is smaller then 0 - detection disabled.");
+        } finally {
+            detection_started = false;
         }
     }
+
+    async function detect_moves() {
+        if (!is_proper_page()) {
+            return;
+        }
+        let added = await add_detect_moved_blocks_button();
+        if (!added) {
+            return;
+        }
+        if (!auto_detection_done) {
+            auto_detection_done = true;
+            maybe_show_first_run_hint();
+            run_detection();
+        }
+    }
+
+    chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+        if (request.popupCommand === "run_detection_now") {
+            run_detection()
+                .then(() => sendResponse({ ok: true }))
+                .catch((error) => sendResponse({
+                    ok: false,
+                    error: error && error.message ? error.message : String(error),
+                }));
+            return true;
+        }
+        return false;
+    });
 
     async function main() {
         timer = setInterval(detect_moves, 3000);

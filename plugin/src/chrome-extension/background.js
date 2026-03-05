@@ -1,73 +1,475 @@
+"use strict";
 
+const REVIEWRACCOON_API_URL = "https://reviewraccoon.com/moved-blocks";
+const MIN_LINES_STORAGE_KEY = "detect-moved-blocks__min-lines-count";
+const DEFAULT_MIN_LINES_COUNT = 2;
+const MAX_BADGE_COUNT = 999;
+const tabState = new Map();
 
-'use strict';
-
-function get_diff_url(page_url){
-  let repo_params = get_repo_params_from_url(page_url);
-  if (repo_params.commit_hash === undefined) {
-    return `https://github.com/${repo_params.user_name}/${repo_params.repo_name}/pull/${repo_params.pull_number}.diff`
-  } else {
-    return `https://github.com/${repo_params.user_name}/${repo_params.repo_name}/commit/${repo_params.commit_hash}.diff`
-  }
+function create_default_state() {
+  return {
+    phase: "idle",
+    subPhase: null,
+    status: "idle",
+    blockCount: 0,
+    reasonCode: null,
+    errorMessage: null,
+    minLinesCount: DEFAULT_MIN_LINES_COUNT,
+    updatedAt: new Date().toISOString(),
+  };
 }
 
-function get_repo_params_from_url(url){
-    // firefox does not support named groups
-    //                                   user     repo              pull_no              commit_hash
-    let regex = /https:\/\/github\.com\/([^/]+)\/([^/]+)(?:\/pull\/(\d+))?(?:\/commits?\/(\w+))?/g;
-    let match = regex.exec(url);
-    if (!match){
-        console.log(`Could not extract user_name from url: ${url}`);
-  	    return null;
-    }
-    let user_name = match[1];
-    let repo_name = match[2];
-    let pull_number = match[3];
-    let commit_hash = match[4];
+function to_error_message(error) {
+  if (!error) return "Unknown error";
+  if (typeof error === "string") return error;
+  if (error.message) return error.message;
+  return JSON.stringify(error);
+}
 
+function is_supported_github_diff_page(url) {
+  if (!url || typeof url !== "string") return false;
+  return /https:\/\/github\.com\/[^/]+\/[^/]+\/(pull\/\d+\/files|commits?\/[A-Za-z0-9]+)/.test(url);
+}
+
+function get_repo_params_from_url(url) {
+  if (!url) return null;
+
+  let pr_match = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/.*)?$/);
+  if (pr_match) {
     return {
-        'user_name': user_name,
-        'repo_name': repo_name,
-        'pull_number': pull_number,
-        'commit_hash': commit_hash,
+      user_name: pr_match[1],
+      repo_name: pr_match[2],
+      pull_number: pr_match[3],
+      commit_hash: undefined,
     };
+  }
+
+  let commit_match = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/commits?\/([A-Za-z0-9]+)(?:\/.*)?$/);
+  if (commit_match) {
+    return {
+      user_name: commit_match[1],
+      repo_name: commit_match[2],
+      pull_number: undefined,
+      commit_hash: commit_match[3],
+    };
+  }
+  return null;
 }
 
-chrome.runtime.onMessage.addListener(
-  function(request, sender, sendResponse) {
-    if (request.contentScriptQuery === "diff_text") {
-      console.log(`Received message '${request.contentScriptQuery}' with params: ${JSON.stringify(request.pull_request_url)} from user ${JSON.stringify(request.user_name)}`);
-
-      let diff_url = get_diff_url(request.pull_request_url);
-      console.log(`Requesting url: ${diff_url}`);
-      fetch(diff_url, {
-        method: 'GET',
-        mode: 'cors',
-        headers: {
-            "Content-Type": "text/plain",
-        }
-      })
-        .then(response => response.text())
-        .then((diff_text) => {
-          console.log(`Received diff text. Length: ${diff_text.length}`);
-          console.log(`Sending diff to ReviewRaccoon.com to detect moved blocks.`);
-          return fetch("https://reviewraccoon.com/moved-blocks", {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                'diff_text': diff_text,
-                'pull_request_url': request.pull_request_url,
-                'user_name': request.user_name,
-                'min_lines_count': request.min_lines_count
-            })
-          })
-        })
-        .then(response => response.json())
-        .then(detected_blocks => sendResponse(detected_blocks))
-        .catch(error => console.log(`Received error while getting diff: ${error}`));
-      return true;
-    }
+function get_diff_url(page_url) {
+  let repo_params = get_repo_params_from_url(page_url);
+  if (!repo_params) {
+    return null;
   }
-);
+  if (repo_params.commit_hash === undefined) {
+    return `https://github.com/${repo_params.user_name}/${repo_params.repo_name}/pull/${repo_params.pull_number}.diff`;
+  }
+  return `https://github.com/${repo_params.user_name}/${repo_params.repo_name}/commit/${repo_params.commit_hash}.diff`;
+}
+
+function normalize_min_lines_count(value) {
+  let parsed = Number.parseFloat(value);
+  if (Number.isNaN(parsed)) return DEFAULT_MIN_LINES_COUNT;
+  return parsed;
+}
+
+async function get_min_lines_count_setting() {
+  let result = await chrome.storage.local.get([MIN_LINES_STORAGE_KEY]);
+  return normalize_min_lines_count(result[MIN_LINES_STORAGE_KEY]);
+}
+
+async function set_min_lines_count_setting(value) {
+  let normalized = normalize_min_lines_count(value);
+  await chrome.storage.local.set({ [MIN_LINES_STORAGE_KEY]: normalized });
+  return normalized;
+}
+
+async function set_badge_for_tab(tabId, state) {
+  if (typeof tabId !== "number") return;
+  try {
+    if (state.status === "error") {
+      await chrome.action.setBadgeText({ tabId: tabId, text: "!" });
+      await chrome.action.setBadgeBackgroundColor({ tabId: tabId, color: "#d93025" });
+      return;
+    }
+
+    if (state.status === "running") {
+      await chrome.action.setBadgeText({ tabId: tabId, text: "…" });
+      await chrome.action.setBadgeBackgroundColor({ tabId: tabId, color: "#1a73e8" });
+      return;
+    }
+
+    if (state.status === "success" || state.status === "no_blocks") {
+      let badge_text = String(Math.min(state.blockCount || 0, MAX_BADGE_COUNT));
+      await chrome.action.setBadgeText({ tabId: tabId, text: badge_text });
+      await chrome.action.setBadgeBackgroundColor({ tabId: tabId, color: "#188038" });
+      return;
+    }
+
+    await chrome.action.setBadgeText({ tabId: tabId, text: "" });
+  } catch (_ignored_error) {
+    // Tab might be gone or inaccessible while badge update is in flight.
+  }
+}
+
+async function update_tab_state(tabId, patch) {
+  if (typeof tabId !== "number") return create_default_state();
+  let current = tabState.get(tabId) || create_default_state();
+  let next = {
+    ...current,
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  };
+  tabState.set(tabId, next);
+  await set_badge_for_tab(tabId, next);
+  return next;
+}
+
+async function get_or_create_tab_state(tabId, tabUrl) {
+  let min_lines_count = await get_min_lines_count_setting();
+  let existing = tabState.get(tabId);
+  if (existing && !is_supported_github_diff_page(tabUrl)) {
+    let downgraded = {
+      ...existing,
+      phase: "precheck",
+      subPhase: null,
+      status: "not_supported_page",
+      blockCount: 0,
+      reasonCode: null,
+      errorMessage: null,
+      minLinesCount: min_lines_count,
+    };
+    tabState.set(tabId, downgraded);
+    await set_badge_for_tab(tabId, downgraded);
+    return downgraded;
+  }
+  if (existing) {
+    return {
+      ...existing,
+      minLinesCount: min_lines_count,
+    };
+  }
+
+  let initial = {
+    ...create_default_state(),
+    minLinesCount: min_lines_count,
+  };
+  if (!is_supported_github_diff_page(tabUrl)) {
+    initial.phase = "precheck";
+    initial.status = "not_supported_page";
+  }
+  tabState.set(tabId, initial);
+  await set_badge_for_tab(tabId, initial);
+  return initial;
+}
+
+function make_error_state(phase, subPhase, reasonCode, errorMessage) {
+  return {
+    phase: phase,
+    subPhase: subPhase || null,
+    status: "error",
+    reasonCode: reasonCode || "unknown_error",
+    errorMessage: errorMessage || "Unknown error",
+  };
+}
+
+async function handle_diff_text_request(request, sender, sendResponse) {
+  let tab_id = sender && sender.tab ? sender.tab.id : undefined;
+  let page_url = request.pull_request_url || (sender && sender.tab ? sender.tab.url : "");
+  let min_lines_count = await get_min_lines_count_setting();
+
+  if (typeof tab_id !== "number") {
+    sendResponse({
+      ok: false,
+      error: make_error_state("precheck", null, "missing_tab_id", "Could not determine tab id."),
+    });
+    return;
+  }
+
+  await update_tab_state(tab_id, {
+    phase: "precheck",
+    subPhase: null,
+    status: "running",
+    reasonCode: null,
+    errorMessage: null,
+    minLinesCount: min_lines_count,
+  });
+
+  if (!is_supported_github_diff_page(page_url)) {
+    let state = await update_tab_state(tab_id, {
+      phase: "precheck",
+      status: "not_supported_page",
+      reasonCode: null,
+      errorMessage: null,
+      blockCount: 0,
+    });
+    sendResponse({
+      ok: false,
+      error: {
+        phase: state.phase,
+        subPhase: state.subPhase,
+        reasonCode: "unsupported_page",
+        errorMessage: "This is not a supported GitHub PR files or commit page.",
+      },
+    });
+    return;
+  }
+
+  if (min_lines_count < 0) {
+    let state = await update_tab_state(tab_id, {
+      phase: "precheck",
+      status: "disabled_by_settings",
+      reasonCode: null,
+      errorMessage: null,
+      blockCount: 0,
+    });
+    sendResponse({
+      ok: false,
+      error: {
+        phase: state.phase,
+        subPhase: state.subPhase,
+        reasonCode: "disabled_by_settings",
+        errorMessage: "Detection is disabled in settings.",
+      },
+    });
+    return;
+  }
+
+  let diff_url = get_diff_url(page_url);
+  if (!diff_url) {
+    let state = await update_tab_state(tab_id, make_error_state("precheck", null, "invalid_page_url", "Could not parse GitHub URL."));
+    sendResponse({ ok: false, error: state });
+    return;
+  }
+
+  let diff_text = "";
+  try {
+    await update_tab_state(tab_id, {
+      phase: "diff_download",
+      subPhase: null,
+      status: "running",
+      reasonCode: null,
+      errorMessage: null,
+    });
+
+    let diff_response = await fetch(diff_url, {
+      method: "GET",
+      mode: "cors",
+      headers: { "Content-Type": "text/plain" },
+    });
+    if (!diff_response.ok) {
+      let state = await update_tab_state(
+        tab_id,
+        make_error_state(
+          "diff_download",
+          null,
+          "diff_http_error",
+          `GitHub diff request failed with status ${diff_response.status}.`
+        )
+      );
+      sendResponse({ ok: false, error: state });
+      return;
+    }
+    diff_text = await diff_response.text();
+  } catch (error) {
+    let state = await update_tab_state(
+      tab_id,
+      make_error_state("diff_download", null, "diff_download_failed", to_error_message(error))
+    );
+    sendResponse({ ok: false, error: state });
+    return;
+  }
+
+  let server_response;
+  try {
+    await update_tab_state(tab_id, {
+      phase: "server_request",
+      subPhase: "server_connect",
+      status: "running",
+      reasonCode: null,
+      errorMessage: null,
+    });
+
+    server_response = await fetch(REVIEWRACCOON_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        diff_text: diff_text,
+        pull_request_url: page_url,
+        user_name: request.user_name,
+        min_lines_count: min_lines_count,
+      }),
+    });
+  } catch (error) {
+    let state = await update_tab_state(
+      tab_id,
+      make_error_state("server_request", "server_connect", "server_connect_failed", to_error_message(error))
+    );
+    sendResponse({ ok: false, error: state });
+    return;
+  }
+
+  if (!server_response.ok) {
+    let response_body = "";
+    try {
+      response_body = await server_response.text();
+    } catch (_ignored_error) {
+      response_body = "";
+    }
+    let state = await update_tab_state(
+      tab_id,
+      make_error_state(
+        "server_response",
+        "server_http_error",
+        `server_http_${server_response.status}`,
+        response_body || `ReviewRaccoon server returned ${server_response.status}.`
+      )
+    );
+    sendResponse({ ok: false, error: state });
+    return;
+  }
+
+  let detected_blocks = null;
+  try {
+    await update_tab_state(tab_id, {
+      phase: "server_response",
+      subPhase: null,
+      status: "running",
+      reasonCode: null,
+      errorMessage: null,
+    });
+    detected_blocks = await server_response.json();
+    if (!Array.isArray(detected_blocks)) {
+      throw new Error("Invalid response payload. Expected array of detected blocks.");
+    }
+  } catch (error) {
+    let state = await update_tab_state(
+      tab_id,
+      make_error_state("server_response", "server_invalid_payload", "server_invalid_payload", to_error_message(error))
+    );
+    sendResponse({ ok: false, error: state });
+    return;
+  }
+
+  await update_tab_state(tab_id, {
+    phase: "render",
+    subPhase: null,
+    status: "running",
+    reasonCode: null,
+    errorMessage: null,
+    blockCount: detected_blocks.length,
+  });
+  sendResponse({
+    ok: true,
+    detectedBlocks: detected_blocks,
+  });
+}
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  tabState.delete(tabId);
+});
+
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (!changeInfo.url && changeInfo.status !== "loading") {
+    return;
+  }
+  let min_lines_count = await get_min_lines_count_setting();
+  if (!is_supported_github_diff_page(tab.url || "")) {
+    await update_tab_state(tabId, {
+      phase: "precheck",
+      subPhase: null,
+      status: "not_supported_page",
+      blockCount: 0,
+      reasonCode: null,
+      errorMessage: null,
+      minLinesCount: min_lines_count,
+    });
+  } else {
+    await update_tab_state(tabId, {
+      phase: "idle",
+      subPhase: null,
+      status: "idle",
+      blockCount: 0,
+      reasonCode: null,
+      errorMessage: null,
+      minLinesCount: min_lines_count,
+    });
+  }
+});
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  (async () => {
+    if (request.contentScriptQuery === "diff_text") {
+      await handle_diff_text_request(request, sender, sendResponse);
+      return;
+    }
+
+    if (request.contentScriptQuery === "update_tab_state") {
+      let tab_id = sender && sender.tab ? sender.tab.id : request.tabId;
+      let state = request.state || {};
+      if (typeof tab_id !== "number") {
+        sendResponse({ ok: false, error: "Missing tab id for state update." });
+        return;
+      }
+
+      if (state.status === "success") {
+        let block_count = Number.isFinite(state.blockCount) ? state.blockCount : 0;
+        let saved_state = await update_tab_state(tab_id, {
+          phase: state.phase || "render",
+          subPhase: state.subPhase || null,
+          status: block_count > 0 ? "success" : "no_blocks",
+          blockCount: block_count,
+          reasonCode: null,
+          errorMessage: null,
+        });
+        sendResponse({ ok: true, state: saved_state });
+        return;
+      }
+
+      if (state.status === "error") {
+        let saved_state = await update_tab_state(
+          tab_id,
+          make_error_state(
+            state.phase || "render",
+            state.subPhase || null,
+            state.reasonCode || "render_error",
+            state.errorMessage || "Failed to render blocks on the page."
+          )
+        );
+        sendResponse({ ok: true, state: saved_state });
+        return;
+      }
+
+      let saved_state = await update_tab_state(tab_id, state);
+      sendResponse({ ok: true, state: saved_state });
+      return;
+    }
+
+    if (request.popupQuery === "get_tab_state") {
+      let tab_id = request.tabId;
+      if (typeof tab_id !== "number") {
+        sendResponse({ ok: true, state: create_default_state() });
+        return;
+      }
+      let state = await get_or_create_tab_state(tab_id, request.tabUrl || "");
+      sendResponse({ ok: true, state: state });
+      return;
+    }
+
+    if (request.popupQuery === "set_min_lines_count") {
+      let min_lines_count = await set_min_lines_count_setting(request.value);
+      if (typeof request.tabId === "number" && tabState.has(request.tabId)) {
+        await update_tab_state(request.tabId, { minLinesCount: min_lines_count });
+      }
+      sendResponse({ ok: true, minLinesCount: min_lines_count });
+      return;
+    }
+
+    sendResponse({ ok: false, error: "Unknown message type." });
+  })().catch((error) => {
+    sendResponse({ ok: false, error: to_error_message(error) });
+  });
+  return true;
+});
