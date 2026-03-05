@@ -21,7 +21,7 @@ class CustomJsonEncoder(json.JSONEncoder):
 
 class MainPageResource(object):
     def on_get(self, req, resp):
-        resp.content_type = 'text/html'
+        resp.content_type = "text/html"
         resp.body = dedent("""
             <html>
                 <head>
@@ -42,11 +42,13 @@ class MovedBlocksResource(object):
         resp.body = json.dumps({"message": "Hello world!"})
 
     def on_post(self, req, resp):
-        diff_text = req.media.get('diff_text')
-        pull_url = req.media.get('pull_request_url')
-        user_name = req.media.get('user_name')
-        min_lines_count = req.media.get('min_lines_count')
-        logger.info(f"Received request for PR: {pull_url} for user: {user_name} with min_lines_count: {min_lines_count}")
+        diff_text = req.media.get("diff_text")
+        pull_url = req.media.get("pull_request_url")
+        user_name = req.media.get("user_name")
+        min_lines_count = req.media.get("min_lines_count")
+        logger.info(
+            f"Received request for PR: {pull_url} for user: {user_name} with min_lines_count: {min_lines_count}"
+        )
         detector = MovedBlocksDetector.from_diff(diff_text)
         detected_blocks = detector.detect_moved_blocks(min_lines_count)
         resp.body = json.dumps(detected_blocks, cls=CustomJsonEncoder)
@@ -54,8 +56,8 @@ class MovedBlocksResource(object):
 
 def create_api():
     api = falcon.API()
-    api.add_route('/', MainPageResource())
-    api.add_route('/moved-blocks', MovedBlocksResource())
+    api.add_route("/", MainPageResource())
+    api.add_route("/moved-blocks", MovedBlocksResource())
     return api
 
 

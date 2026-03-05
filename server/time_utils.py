@@ -29,7 +29,7 @@ def measure_fun_time():
     def _measure_fun_time(f):
         @functools.wraps(f)
         def measure_fun_time_wrapper(*fun_args, **fun_kwargs):
-            stat_name = f.__name__.strip('_')
+            stat_name = f.__name__.strip("_")
             with MeasureTime(stat_name):
                 return f(*fun_args, **fun_kwargs)
 

@@ -19,9 +19,9 @@ class MyTestCase(testing.TestCase):
 
 class TestMyApp(MyTestCase):
     def test_get_message(self):
-        expected_response = {u'message': u'Hello world!'}
+        expected_response = {"message": "Hello world!"}
 
-        result = self.simulate_get('/moved-blocks')
+        result = self.simulate_get("/moved-blocks")
         self.assertEqual(result.json, expected_response)
 
     def test_post_message_with_diff_text(self):
@@ -39,56 +39,63 @@ class TestMyApp(MyTestCase):
          
         """)
         post_data = {
-            'diff_text': diff_text,
+            "diff_text": diff_text,
         }
 
-        result = self.simulate_post('/moved-blocks', json=post_data)
+        result = self.simulate_post("/moved-blocks", json=post_data)
         self.assertEqual(len(result.json), 1)
-        self.assertEqual(len(result.json[0]['lines']), 3)
+        self.assertEqual(len(result.json[0]["lines"]), 3)
 
     def test_post_message_with_added_and_removed_lines(self):
-        removed_lines = ChangedLines("file_with_removed_lines", {
-            1: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
-            2: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
-            3: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
-            4: "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
-            5: "5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5"
-        })
+        removed_lines = ChangedLines(
+            "file_with_removed_lines",
+            {
+                1: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+                2: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+                3: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
+                4: "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+                5: "5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5",
+            },
+        )
 
-        added_lines = ChangedLines("file_with_added_lines", {
-            10: "-------------------------------------------",
-            11: "-------------------------------------------",
-            12: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
-            13: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
-            14: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
-            15: "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
-            16: "-------------------------------------------",
-        })
+        added_lines = ChangedLines(
+            "file_with_added_lines",
+            {
+                10: "-------------------------------------------",
+                11: "-------------------------------------------",
+                12: "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+                13: "2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2",
+                14: "3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3",
+                15: "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+                16: "-------------------------------------------",
+            },
+        )
 
         post_data = {
-            'added_lines': added_lines.to_lines_dicts(),
-            'removed_lines': removed_lines.to_lines_dicts(),
+            "added_lines": added_lines.to_lines_dicts(),
+            "removed_lines": removed_lines.to_lines_dicts(),
         }
 
-        result = self.simulate_post('/moved-blocks', json=post_data)
+        result = self.simulate_post("/moved-blocks", json=post_data)
         self.assertEqual(len(result.json), 1)
-        self.assertEqual(len(result.json[0]['lines']), 4)
-        self.assertDictEqual(result.json[0]['lines'][0],
+        self.assertEqual(len(result.json[0]["lines"]), 4)
+        self.assertDictEqual(
+            result.json[0]["lines"][0],
             {
-                'added_line': {
-                    'file': 'file_with_added_lines',
-                    'line_no': 12,
-                    'leading_whitespaces': '',
-                    'trim_text': '1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1'
+                "added_line": {
+                    "file": "file_with_added_lines",
+                    "line_no": 12,
+                    "leading_whitespaces": "",
+                    "trim_text": "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
                 },
-                'removed_line': {
-                    'file': 'file_with_removed_lines',
-                    'line_no': 1,
-                    'leading_whitespaces': '',
-                    'trim_text': '1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1'
+                "removed_line": {
+                    "file": "file_with_removed_lines",
+                    "line_no": 1,
+                    "leading_whitespaces": "",
+                    "trim_text": "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
                 },
-                'match_probability': 1
-            }
+                "match_probability": 1,
+            },
         )
 
     def diff_to_added_and_removed_lines(self, diff_text):
@@ -98,7 +105,11 @@ class TestMyApp(MyTestCase):
         for patched_file in patch:
             for hunk in patched_file:
                 for line in hunk:
-                    leading_whitespace, trim_text = split_to_leading_whitespace_and_trim_text(line.value.rstrip('\n'))
+                    leading_whitespace, trim_text = (
+                        split_to_leading_whitespace_and_trim_text(
+                            line.value.rstrip("\n")
+                        )
+                    )
                     file = patched_file.path
                     if line.is_added:
                         line_no = line.target_line_no
@@ -108,21 +119,28 @@ class TestMyApp(MyTestCase):
                         lines_list = removed_lines
                     else:
                         continue
-                    lines_list.append({
-                        'file': file,
-                        'line_no': line_no,
-                        'trim_text': trim_text,
-                        'leading_whitespaces': leading_whitespace,
-                    })
+                    lines_list.append(
+                        {
+                            "file": file,
+                            "line_no": line_no,
+                            "trim_text": trim_text,
+                            "leading_whitespaces": leading_whitespace,
+                        }
+                    )
         return {
-            'added_lines': added_lines,
-            'removed_lines': removed_lines,
+            "added_lines": added_lines,
+            "removed_lines": removed_lines,
         }
 
     def test_compare_diff_with_javascript_plugin(self):
-        url = 'https://github.com/albrycht/MoveBlockDetector/pull/1.diff'
-        r = requests.get(url, headers={'Authorization': f'token {GITHUB_TOKEN}',
-                                       'Accept': 'application/vnd.github.v3.sha'})
+        url = "https://github.com/albrycht/MoveBlockDetector/pull/1.diff"
+        r = requests.get(
+            url,
+            headers={
+                "Authorization": f"token {GITHUB_TOKEN}",
+                "Accept": "application/vnd.github.v3.sha",
+            },
+        )
 
         parsed_diff = self.diff_to_added_and_removed_lines(r.text)
 
@@ -307,7 +325,7 @@ class TestMyApp(MyTestCase):
                     "line_no": 44,
                     "trim_text": "Maecenas fringilla sem et ante accumsan, vitae hendrerit tellus malesuada. In non sodales ligula. Vivamus at mollis tortor.",
                     "leading_whitespaces": "",
-                }
+                },
             ],
             "removed_lines": [
                 {
@@ -405,10 +423,12 @@ class TestMyApp(MyTestCase):
                     "line_no": 30,
                     "trim_text": "Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas.",
                     "leading_whitespaces": "",
-                }
-            ]
+                },
+            ],
         }
 
-        for key in ['added_lines', 'removed_lines']:
-            for from_js_line_dict, parsed_diff_line_dict in zip(from_js[key], parsed_diff[key]):
+        for key in ["added_lines", "removed_lines"]:
+            for from_js_line_dict, parsed_diff_line_dict in zip(
+                from_js[key], parsed_diff[key]
+            ):
                 self.assertDictEqual(from_js_line_dict, parsed_diff_line_dict)

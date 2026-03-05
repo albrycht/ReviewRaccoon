@@ -6,9 +6,9 @@ import unittest
 
 __version__ = (0, 0, 11)
 
-_non_word_re = re.compile(r'[^\w, ]+')
+_non_word_re = re.compile(r"[^\w, ]+")
 
-__all__ = ('FuzzySet',)
+__all__ = ("FuzzySet",)
 
 
 class FuzzySet(object):
@@ -57,6 +57,7 @@ class FuzzySet(object):
             if results:
                 return results
         raise KeyError(value)
+
     def __get(self, value, gram_size, min_match_score=0.5):
         lvalue = value.lower()
         matches = collections.defaultdict(float)
@@ -72,12 +73,17 @@ class FuzzySet(object):
             return None
 
         # cosine similarity
-        results = [(match_score / (norm * items[idx][0]), items[idx][1])
-                   for idx, match_score in matches.items()]
+        results = [
+            (match_score / (norm * items[idx][0]), items[idx][1])
+            for idx, match_score in matches.items()
+        ]
         results.sort(reverse=True, key=operator.itemgetter(0))
 
-        return [(score, self.exact_set[lval]) for score, lval in results
-                if score >= min_match_score]
+        return [
+            (score, self.exact_set[lval])
+            for score, lval in results
+            if score >= min_match_score
+        ]
 
     def get(self, key, default=None, exact_match_only=True, min_match_score=0.5):
         try:
@@ -100,28 +106,34 @@ def _gram_counter(value, gram_size=2):
 
 
 def _iterate_grams(value, gram_size=2):
-    simplified = '-' + value + '-'
+    simplified = "-" + value + "-"
     len_diff = gram_size - len(simplified)
     if len_diff > 0:
-        value += '-' * len_diff
+        value += "-" * len_diff
     for i in range(len(simplified) - gram_size + 1):
-        yield simplified[i:i + gram_size]
+        yield simplified[i : i + gram_size]
 
 
 class FuzzySetTest(unittest.TestCase):
-
-    def get_from_set(self, fuzzy_set, search_term, expected_rows, exact_match_only=False, min_match_score=0.5):
-        rows = fuzzy_set.get(search_term, [], exact_match_only=exact_match_only, min_match_score=min_match_score)
+    def get_from_set(
+        self,
+        fuzzy_set,
+        search_term,
+        expected_rows,
+        exact_match_only=False,
+        min_match_score=0.5,
+    ):
+        rows = fuzzy_set.get(
+            search_term,
+            [],
+            exact_match_only=exact_match_only,
+            min_match_score=min_match_score,
+        )
         vals = [val for _, val in rows]
         self.assertEqual(expected_rows, vals)
 
     def test_simple(self):
-        rows = [
-            "Ala ma kota",
-            "Ala ma psa",
-            "Zuzia ma psa",
-            "Zuzia ma kanarka"
-        ]
+        rows = ["Ala ma kota", "Ala ma psa", "Zuzia ma psa", "Zuzia ma kanarka"]
         fuzzy_set = FuzzySet(rows)
         self.get_from_set(fuzzy_set, "ia ma psa", ["Zuzia ma psa", "Ala ma psa"])
 
@@ -131,8 +143,15 @@ class FuzzySetTest(unittest.TestCase):
             "Ala ma kota.",
         ]
         fuzzy_set = FuzzySet(rows)
-        self.get_from_set(fuzzy_set, "Ala ma kota", ["Ala ma kota"], exact_match_only=True)
-        self.get_from_set(fuzzy_set, "Ala ma kota", ["Ala ma kota", "Ala ma kota."], exact_match_only=False)
+        self.get_from_set(
+            fuzzy_set, "Ala ma kota", ["Ala ma kota"], exact_match_only=True
+        )
+        self.get_from_set(
+            fuzzy_set,
+            "Ala ma kota",
+            ["Ala ma kota", "Ala ma kota."],
+            exact_match_only=False,
+        )
 
     def test_fuzzy_set_works_well_for_short_words(self):
         rows = [
