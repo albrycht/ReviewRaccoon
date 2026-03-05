@@ -42,9 +42,9 @@ chrome.runtime.onMessage.addListener(
       console.log(`Requesting url: ${diff_url}`);
       fetch(diff_url, {
         method: 'GET',
+        mode: 'cors',
         headers: {
             "Content-Type": "text/plain",
-            'mode': 'no-cors',
         }
       })
         .then(response => response.text())

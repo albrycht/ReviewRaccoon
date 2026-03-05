@@ -1,7 +1,21 @@
+(() => {
+if (globalThis.__reviewRaccoonContentScriptLoaded) {
+    return;
+}
+globalThis.__reviewRaccoonContentScriptLoaded = true;
+
 const REMOVED = "removed";
 const ADDED = "added";
 const ALL_COLORS = ['#058DC7', '#50B432', '#ED561B', '#DDDF00', '#24CBE5', '#64E572', '#FF9655', '#FFF263', '#6AF9C4',
-                    'red', 'orange', 'green', 'blue', 'purple', 'brown'];
+    'red', 'orange', 'green', 'blue', 'purple', 'brown'];
+
+// Cache for file containers in new view to avoid repeated DOM queries
+let filepath_to_container_new = {};
+
+function is_new_view() {
+    return document.querySelector('[class*="DiffComparisonViewer-module__FileContainer"]') !== null ||
+        document.querySelector('button[class*="ReviewMenuButton-module__ReviewMenuButton"]') !== null;
+}
 
 let filepath_to_anchor = {};
 
@@ -17,6 +31,10 @@ function get_anchor_for_filepath(filepath) {
         return filepath_to_anchor[filepath]
     }
 
+    if (is_new_view()) {
+        return null; // Anchor logic not used in new view
+    }
+
     let file_header = document.querySelector(`.file-header[data-path="${filepath}"`)
     if (file_header === null) {
         console.log(`Could not find file-header for path: ${filepath}`)
@@ -29,13 +47,141 @@ function get_anchor_for_filepath(filepath) {
     }
 }
 
+function get_file_container_new_view(filepath) {
+    if (filepath in filepath_to_container_new) {
+        if (document.body.contains(filepath_to_container_new[filepath])) {
+            return filepath_to_container_new[filepath];
+        }
+    }
+
+    // New view doesn't have data-path on container usually, so we might need to find the header with the filename
+    // and find the parent container.
+    // Headers often have the filename in a heading or similar.
+    // Based on inspection, headers are .DiffFileHeader-module__header--xG9S8
+    // We can look for the filename in the header text or title attribute.
+
+    // Strategy: Find all file headers, check their text for filepath.
+    const headers = document.querySelectorAll('[class*="DiffFileHeader"]');
+    for (let header of headers) {
+        if (header.textContent.includes(filepath) || (header.getAttribute('data-path') === filepath)) { // Fallback if data-path exists
+            let container = header.parentElement;
+            // Traverse up to find the main container (DiffComparisonViewer...)
+            while (container && !container.className.includes('DiffComparisonViewer-module__FileContainer')) {
+                container = container.parentElement;
+            }
+            if (container) {
+                filepath_to_container_new[filepath] = container;
+                return container;
+            }
+        }
+    }
+
+    // Alternative: Try to find by specific file-info classes if textContent is too broad
+    // But textContent usually contains the filename "path/to/file.ext"
+    return null;
+}
+
+function get_line_node_new_view(line, is_removed) {
+    let container = get_file_container_new_view(line.file);
+    if (!container) return null;
+
+    // Find all rows in this container
+    let rows = container.querySelectorAll('.diff-line-row');
+
+    // We need to find the cell with the correct line number
+    // "L" means removed (left side usually), "R" means added (right side usually)
+    // In DOM:
+    // Removed lines have specific class or their number cell has specific attributes?
+    // Let's rely on data-line-number if present, or cell position/class.
+
+    // Typically:
+    // Left number cell: .diff-line-number (and maybe specific col index)
+    // Right number cell: .diff-line-number
+
+    // A robust way is to look for the number cell with the matching number.
+    // If split view:
+    //  Left side number: 1st number cell in row?
+    //  Right side number: 2nd number cell in row?
+
+    // Let's iterate rows and check cells.
+    for (let row of rows) {
+        // Get number cells
+        let num_cells = row.querySelectorAll('.diff-line-number');
+
+        // Split view logic assumption:
+        // If is_removed (Left):
+        //   Check 1st number cell.
+        // If !is_removed (Right):
+        //   Check 2nd number cell (if exists) or 1st if it's an added-only row?
+
+        // Better: Check content of number cells.
+        // Usually there are 2 number cells in split view.
+
+        // Let's refine based on "is_removed".
+        // remove_line -> "original" line number
+        // added_line -> "new" line number
+
+        // In the new view, data-line-number-original and data-line-number-new might exist?
+        // Inspection didn't show them explicitly in my summary, but they often exist.
+        // If not, we use textContent.
+
+        for (let cell of num_cells) {
+            let num = parseInt(cell.textContent.trim());
+            if (isNaN(num)) continue;
+
+            if (num === line.line_no) {
+                // Check if this cell represents left or right.
+                // In split view, left is usually first child or earlier sibling?
+                // Or we can check the corresponding code cell.
+
+                // Let's look for the code cell that corresponds to this number cell.
+                // In new view table structure, it's often:
+                // Num(L) | Code(L) | Num(R) | Code(R)
+
+                let rowChildren = row.children;
+                let cellIndex = Array.from(rowChildren).indexOf(cell);
+                let next = cell.nextElementSibling;
+
+                // Simple Heuristic:
+                if (rowChildren.length >= 4) {
+                    // Split view
+                    if (is_removed) {
+                        // We want the 'original' side. Index 0 is typically NumL.
+                        if (cellIndex === 0 && next) return next;
+                    } else {
+                        // We want the 'new' side. Index 2 is typically NumR.
+                        if (cellIndex === 2 && next) return next;
+                    }
+                } else {
+                    // Unified or other view
+                    // If unified: NumL, NumR, Code
+                    if (rowChildren.length === 3) {
+                        if (is_removed && cellIndex === 0) return rowChildren[2];
+                        if (!is_removed && cellIndex === 1) return rowChildren[2];
+                    } else {
+                        // Fallback
+                        if (next && (next.classList.contains('diff-text-cell') || next.classList.contains('blob-code-inner'))) {
+                            return next;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return null;
+}
+
 function get_line_node(line, is_removed) {
+    if (is_new_view()) {
+        return get_line_node_new_view(line, is_removed);
+    }
     let anchor = get_anchor_for_filepath(line.file)
     if (anchor === null) {
         return null
     }
-    node_id = anchor + (is_removed ? 'L' : 'R') + line.line_no;
-    node = document.getElementById(node_id);
+    let node_id = anchor + (is_removed ? 'L' : 'R') + line.line_no;
+    let node = document.getElementById(node_id);
+    if (!node) return null;
     node = node.nextElementSibling;  // nextElementSibling because id points to td with line number
     if (node.classList.contains('empty-cell')) {
         // in unified view (unified == non-split) there is extra column between line number and line content -> skip it
@@ -46,12 +192,27 @@ function get_line_node(line, is_removed) {
 
 function markLine(line, line_in_block_index, detected_block_index, is_removed, is_first_line, is_last_line, replace_html_content, alt_msg) {
     let line_node = get_line_node(line, is_removed);
+    if (!line_node) {
+        return;
+    }
     let id_prefix = `detected-block-${detected_block_index}-${line_in_block_index}`;
     let data_type = is_removed ? REMOVED : ADDED;
     let oposite_data_type = is_removed ? ADDED : REMOVED;
     let block_color = ALL_COLORS[detected_block_index % ALL_COLORS.length];
 
     let line_content_elem = line_node.querySelector('.blob-code-inner.blob-code-marker');
+    // Fallback for new view
+    if (!line_content_elem && is_new_view()) {
+        line_content_elem = line_node.querySelector('.diff-text-inner') || line_node;
+        // In new view, sometimes the cell IS the container if no inner div? 
+        // But usually there is a div or span inside.
+        // Let's create one if needed or just use the cell.
+        // If we use the cell, we must be careful not to overwrite the marker if we prepend it again.
+    }
+
+    if (!line_content_elem) {
+        return;
+    }
     line_content_elem.innerHTML = replace_html_content;
 
     const block_marker = document.createElement('a');
@@ -60,7 +221,7 @@ function markLine(line, line_in_block_index, detected_block_index, is_removed, i
     block_marker.className = "detectedMovedBlock";
     block_marker.style.backgroundColor = block_color;
     block_marker.title = alt_msg;
-    block_marker.onclick = function() {document.querySelector(`#${id_prefix}-${oposite_data_type}`).scrollIntoView(true); window.scrollBy(0, -103)};
+    block_marker.onclick = function () { document.querySelector(`#${id_prefix}-${oposite_data_type}`).scrollIntoView(true); window.scrollBy(0, -103) };
     line_node.prepend(block_marker);
 
     if (is_first_line) {
@@ -71,13 +232,13 @@ function markLine(line, line_in_block_index, detected_block_index, is_removed, i
     }
 }
 
-function escape_html_markup(text){
+function escape_html_markup(text) {
     return text.replace("<", "&lt;")
 }
 
 
-function get_diff_part_as_html(diff_op, text, diff_op_to_skip){
-    if (diff_op === diff_op_to_skip){
+function get_diff_part_as_html(diff_op, text, diff_op_to_skip) {
+    if (diff_op === diff_op_to_skip) {
         return '';
     }
     if (diff_op === 1 || diff_op === -1) {
@@ -104,7 +265,7 @@ function highlightDetectedBlock(block_index, detected_block) {
         dmp.diff_cleanupSemantic(diff);
         let removed_line_html = '';
         let added_line_html = '';
-        for (let i=0; i<diff.length; i++) {
+        for (let i = 0; i < diff.length; i++) {
             let diff_part = diff[i];
             let [op, text] = diff_part;
             removed_line_html += get_diff_part_as_html(op, text, 1);
@@ -129,12 +290,12 @@ function htmlToElement(html) {
     return template.content.firstChild;
 }
 
-function detect_moved_block_button_exists(){
+function detect_moved_block_button_exists() {
     let existing_button = document.querySelector("#detect_moved_blocks");
     return existing_button !== null;
 }
 
-function get_min_lines_count_or_default(){
+function get_min_lines_count_or_default() {
     let min_lines_count = localStorage.getItem('detect-moved-blocks__min-lines-count');
     if (min_lines_count === null || isNaN(min_lines_count)) {
         min_lines_count = 2;
@@ -142,12 +303,77 @@ function get_min_lines_count_or_default(){
     return min_lines_count
 }
 
-function add_detect_moved_blocks_button() {
-    let button_container = document.querySelector(".pr-review-tools");
-    if (button_container === null) {
-        return  // TODO this is workaround - you should add proper box for this button!
+let button_container = null;
+
+if (is_new_view()) {
+    // Inject into the new toolbar
+    // Look for the "Review changes" / "Submit review" button container
+    // Try class first
+    let reviewButton = document.querySelector('button[class*="ReviewMenuButton-module__ReviewMenuButton"]');
+    // Fallback based on text if class approach fails
+    if (!reviewButton) {
+        let buttons = document.querySelectorAll('button');
+        for (let btn of buttons) {
+            if (btn.textContent.includes('Submit review') || btn.textContent.includes('Review changes')) {
+                reviewButton = btn;
+                break;
+            }
+        }
     }
-    let loading_animation = htmlToElement(`
+
+    if (reviewButton) {
+        // Traverse up to find some container
+        // Usually it's in a div > div setup.
+        // Let's just wrap it in the direct parent if "Stack" is not strictly required
+        button_container = reviewButton.parentElement;
+
+        // Try to find the stack if possible for better alignment
+        let stack = reviewButton.closest('div[class*="Stack"]');
+        if (stack) {
+            button_container = stack;
+        }
+    }
+}
+
+async function add_detect_moved_blocks_button() {
+        let button_container = null;
+
+        if (is_new_view()) {
+            // Inject into the new toolbar
+            // Look for the "Review changes" / "Submit review" button container
+            // Try class first
+            let reviewButton = document.querySelector('button[class*="ReviewMenuButton-module__ReviewMenuButton"]');
+            // Fallback based on text if class approach fails
+            if (!reviewButton) {
+                let buttons = document.querySelectorAll('button');
+                for (let btn of buttons) {
+                    if (btn.textContent.includes('Submit review') || btn.textContent.includes('Review changes')) {
+                        reviewButton = btn;
+                        break;
+                    }
+                }
+            }
+
+            if (reviewButton) {
+                // Traverse up to find some container
+                // Usually it's in a div > div setup.
+                // Let's just wrap it in the direct parent if "Stack" is not strictly required
+                button_container = reviewButton.parentElement;
+
+                // Try to find the stack if possible for better alignment
+                let stack = reviewButton.closest('div[class*="Stack"]');
+                if (stack) {
+                    button_container = stack;
+                }
+            }
+        } else {
+            button_container = document.querySelector(".pr-review-tools");
+        }
+
+        if (button_container === null) {
+            return  // TODO this is workaround - you should add proper box for this button!
+        }
+        let loading_animation = htmlToElement(`
     <div id="detected_moves_loading_animation" style="display: inline-block;">
       <svg version="1.1" id="L4" x="0px" y="0px" viewBox="0 0 100 100" enable-background="new 0 0 0 0" 
         style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" 
@@ -163,28 +389,36 @@ function add_detect_moved_blocks_button() {
         </circle>
       </svg>
     </div>`);
-    let details = document.createElement("details");
-    details.className = "diffbar-item details-reset details-overlay position-relative text-center";
+        let details = document.createElement("details");
+        // Adjust classes for new view if needed, but keeping basic classes might work if they are global.
+        // GitHub new view might not use 'diffbar-item' etc as much.
+        details.className = "diffbar-item details-reset details-overlay position-relative text-center";
+        if (is_new_view()) {
+            details.style.marginRight = "8px"; // Spacing for new toolbar
+            details.style.display = "flex";
+            details.style.alignItems = "center";
+        }
 
-    let carret = document.createElement("div");
-    carret.className = "dropdown-caret";
+        let carret = document.createElement("div");
+        carret.className = "dropdown-caret";
 
 
-    let summary = document.createElement("summary");
+        let summary = document.createElement("summary");
 
-    summary.className = "btn btn-sm";
-    summary.id = "detect_moved_blocks";
-    summary.appendChild(loading_animation);
-    summary.appendChild(htmlToElement('<span class="Counter" style="display: none; margin-right: 4px;" id="detected_moves_counter"></span>'));
-    summary.appendChild(htmlToElement('<span style="margin-right: 4px;">Detect moved blocks</span>'));
-    summary.appendChild(carret);
-    details.appendChild(summary);
-    let min_lines_count = get_min_lines_count_or_default();
+        summary.className = "btn btn-sm";
+        summary.id = "detect_moved_blocks";
+        summary.appendChild(loading_animation);
+        summary.appendChild(htmlToElement('<span class="Counter" style="display: none; margin-right: 4px;" id="detected_moves_counter"></span>'));
+        summary.appendChild(htmlToElement('<span style="margin-right: 4px;">Detect moved blocks</span>'));
+        summary.appendChild(carret);
+        details.appendChild(summary);
+        let min_lines_count = get_min_lines_count_or_default();
 
-    let popover = document.createElement("div");
-    popover.className = "Popover js-diff-settings mt-2 pt-1";
-    popover.style.left = "-62px";
-    popover.innerHTML = `
+        let popover = document.createElement("div");
+        popover.className = "Popover js-diff-settings mt-2 pt-1";
+        popover.style.left = "-62px";
+        popover.style.zIndex = "100"; // Ensure visibility
+        popover.innerHTML = `
         <div class="Popover-message text-left p-3 mx-auto Box box-shadow-large col-6">\n
             <form action="${window.location.href}" accept-charset="UTF-8" method="get">\n
                 <h4 class="mb-2">Detection settings</h4>\n
@@ -194,101 +428,115 @@ function add_detect_moved_blocks_button() {
                 <button class="btn btn-primary btn-sm col-12 mt-3" type="submit" id="detect-button">Apply and reload</button>\n
             </form>\n
         </div>`;
-    details.appendChild(popover);
-    let detect_button = details.querySelector("#detect-button");
+        details.appendChild(popover);
+        let detect_button = details.querySelector("#detect-button");
 
-    detect_button.addEventListener('click', function() {
-        let min_lines_count = parseFloat(document.querySelector("#min-lines-count").value);
-        console.log(`Starting detection: >${min_lines_count}<`);
-        localStorage.setItem('detect-moved-blocks__min-lines-count', min_lines_count);
-    }, false);
+        detect_button.addEventListener('click', function () {
+            let min_lines_count = parseFloat(document.querySelector("#min-lines-count").value);
+            console.log(`Starting detection: >${min_lines_count}<`);
+            localStorage.setItem('detect-moved-blocks__min-lines-count', min_lines_count);
+        }, false);
 
-    button_container.appendChild(details);
-}
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-
-async function expand_large_diffs(){
-    let load_diff_buttons = document.querySelectorAll(".load-diff-button");
-    for (const load_diff_button of load_diff_buttons) {
-        load_diff_button.click();
-    }
-    if (load_diff_buttons.length > 0) {
-        console.log(`Expanded ${load_diff_buttons.length} large diffs`);
-        await sleep(3000);
-    }
-}
-
-async function wait_for_page_load() {
-    let count = 1;
-    while (count > 0) {
-        count = document.querySelectorAll("div.js-diff-progressive-container include-fragment.diff-progressive-loader").length;
-        await sleep(100);
-    }
-    await sleep(1000);  // just in case
-}
-
-function is_proper_page(){
-    let url_regex = /\/files([^\/].*)?$|\/(commits?\/([^\/].*)?)$/g;
-    return window.location.href.match(url_regex);
-}
-
-function highlights_changes(detected_blocks) {
-    console.log(`Received ${detected_blocks.length} detected blocks`);
-
-    let loading_animation = document.querySelector("#detected_moves_loading_animation");
-    if (loading_animation !== null) {
-        loading_animation.style.display = "none";
-    }
-    let counter = document.querySelector("#detected_moves_counter");
-    if (counter !== null){
-        counter.innerText = detected_blocks.length;
-        counter.style.display = "inline-block";
-    }
-
-    for (const iter of detected_blocks.entries()) {
-        let [block_index, detected_block] = iter;
-        highlightDetectedBlock(block_index, detected_block);
-    }
-}
-
-async function detect_moves(){
-    if (detect_moved_block_button_exists() || detection_started){
-        return
-    }
-    if (!is_proper_page()){
-        return
-    }
-    detection_started = true;
-
-    await add_detect_moved_blocks_button();
-    await wait_for_page_load();
-    await expand_large_diffs();
-    let min_lines_count_el = document.querySelector("#min-lines-count");
-    let min_lines_count = min_lines_count_el === null ? get_min_lines_count_or_default() : parseFloat(document.querySelector("#min-lines-count").value);
-    console.log(`Starting detection: min_lines_count=${min_lines_count}`);
-    if (min_lines_count >= 0) {
-        let page_url = window.location.href;
-
-        let user_img_node = document.querySelector("header > div.Header-item > details > summary > img");
-        let user_name = null;
-        if (user_img_node){
-            user_name = user_img_node.alt;
+        if (is_new_view()) {
+            // Prepend to the container to be on the left of the "Review changes" button
+            button_container.insertBefore(details, button_container.firstChild);
+        } else {
+            button_container.appendChild(details);
         }
-        chrome.runtime.sendMessage(
-            {contentScriptQuery: "diff_text", pull_request_url: page_url, user_name: user_name, min_lines_count: min_lines_count},
-            (detected_blocks) => {highlights_changes(detected_blocks)}
-        );
-    } else {
-        console.log("min_lines_count is smaller then 0 - detection disabled.");
+        return true;
     }
-}
 
-async function main() {
-    timer = setInterval(detect_moves, 3000);
-}
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
 
-main();
+
+    async function expand_large_diffs() {
+        let load_diff_buttons = document.querySelectorAll(".load-diff-button");
+        for (const load_diff_button of load_diff_buttons) {
+            load_diff_button.click();
+        }
+        if (load_diff_buttons.length > 0) {
+            console.log(`Expanded ${load_diff_buttons.length} large diffs`);
+            await sleep(3000);
+        }
+    }
+
+    async function wait_for_page_load() {
+        let count = 1;
+        while (count > 0) {
+            count = document.querySelectorAll("div.js-diff-progressive-container include-fragment.diff-progressive-loader").length;
+            await sleep(100);
+        }
+        await sleep(1000);  // just in case
+    }
+
+    function is_proper_page() {
+        let url_regex = /\/files([^\/].*)?$|\/(commits?\/([^\/].*)?)$/g;
+        return window.location.href.match(url_regex);
+    }
+
+    function highlights_changes(detected_blocks) {
+        console.log(`Received ${detected_blocks.length} detected blocks`);
+
+        let loading_animation = document.querySelector("#detected_moves_loading_animation");
+        if (loading_animation !== null) {
+            loading_animation.style.display = "none";
+        }
+        let counter = document.querySelector("#detected_moves_counter");
+        if (counter !== null) {
+            counter.innerText = detected_blocks.length;
+            counter.style.display = "inline-block";
+        }
+
+        for (const iter of detected_blocks.entries()) {
+            let [block_index, detected_block] = iter;
+            highlightDetectedBlock(block_index, detected_block);
+        }
+    }
+
+    async function detect_moves() {
+        if (detect_moved_block_button_exists()) {
+            return
+        }
+        if (detection_started) {
+            return
+        }
+        if (!is_proper_page()) {
+            return
+        }
+        detection_started = true;
+
+        let added = await add_detect_moved_blocks_button();
+        if (!added) {
+            detection_started = false;
+            return;
+        }
+        await wait_for_page_load();
+        await expand_large_diffs();
+        let min_lines_count_el = document.querySelector("#min-lines-count");
+        let min_lines_count = min_lines_count_el === null ? get_min_lines_count_or_default() : parseFloat(document.querySelector("#min-lines-count").value);
+        console.log(`Starting detection: min_lines_count=${min_lines_count}`);
+        if (min_lines_count >= 0) {
+            let page_url = window.location.href;
+
+            let user_img_node = document.querySelector("header > div.Header-item > details > summary > img");
+            let user_name = null;
+            if (user_img_node) {
+                user_name = user_img_node.alt;
+            }
+            chrome.runtime.sendMessage(
+                { contentScriptQuery: "diff_text", pull_request_url: page_url, user_name: user_name, min_lines_count: min_lines_count },
+                (detected_blocks) => { highlights_changes(detected_blocks) }
+            );
+        } else {
+            console.log("min_lines_count is smaller then 0 - detection disabled.");
+        }
+    }
+
+    async function main() {
+        timer = setInterval(detect_moves, 3000);
+    }
+
+    main();
+})();
