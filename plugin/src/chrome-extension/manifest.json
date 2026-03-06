@@ -34,5 +34,11 @@
 		"js": ["diff_match_patch.js", "fuzzyset.js", "contentScript.js"]
 	  }
 	],
+	"web_accessible_resources": [
+	  {
+		"resources": ["images/*.png"],
+		"matches": ["https://github.com/*"]
+	  }
+	],
 	"manifest_version": 3
 }

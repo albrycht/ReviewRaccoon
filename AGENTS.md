@@ -5,6 +5,9 @@ This file is intentionally written for two audiences:
 1. New contributors onboarding to the project.
 2. AI agents (or future automated sessions) that need fast navigation and debugging context.
 
+Maintenance rule:
+- After meaningful runtime, UX, state-flow, or debugging-path changes, update this file in the same session when the new information will help future debugging/navigation.
+
 ## Project purpose
 
 ReviewRaccoon improves GitHub PR review by detecting moved code blocks (including blocks with small edits) and showing these relations directly in GitHub diff UI.
@@ -72,19 +75,39 @@ There is no root build script (`package.json`) or standard CI config in repo roo
 
 ### Fast call graph (mental model)
 
-1. `contentScript.js` schedules detection (`setInterval`), injects button/settings, triggers runtime message.
+1. `contentScript.js` schedules detection (`setInterval`), injects the GitHub toolbar icon control, and triggers runtime messages.
 2. `background.js` converts page URL to `.diff`, fetches diff, POSTs to `https://reviewraccoon.com/moved-blocks`.
 3. `main.py` handles POST and invokes `MovedBlocksDetector.from_diff(...).detect_moved_blocks(...)`.
 4. `detector.py` parses diff, fuzzy-matches lines, builds/merges/filters blocks, returns JSON-serializable structures.
 5. `contentScript.js` renders markers and inline highlights with `diff_match_patch`.
 
+### Recent extension UX and toolbar behavior (Mar 2026)
+
+- Popup UX is state-driven (`idle`, `running`, `success`, `no_blocks`, `error`, `disabled_by_settings`, `not_supported_page`) with phase/subPhase diagnostics from `background.js`.
+- GitHub page control is now an icon-only ReviewRaccoon control in the right toolbar (`.pr-review-tools`), inserted as first item and styled as icon + badge.
+- In-page badge semantics mirror extension badge semantics:
+  - running: `…` (blue)
+  - success/no blocks: numeric count (green)
+  - error: `!` (red)
+- Clicking toolbar icon toggles popup state:
+  - closed -> opens popup (`chrome.action.openPopup`)
+  - open -> closes popup via runtime port (`reviewraccoon-popup`) and `close_popup` message
+  - a short reopen guard in `background.js` prevents close+immediate-reopen race.
+- Toolbar icon rendering avoids GitHub page CSP issues by requesting a base64 data URL from `background.js` (`contentScriptQuery: "get_icon_data_url"`), instead of directly using `chrome-extension://...` in page DOM.
+
 ### Debug entry points by symptom
 
-- **No "Detect moved blocks" button**
-  - Check page gating and toolbar insertion in `contentScript.js` (`is_proper_page`, `is_new_view`, button container lookup).
+- **No ReviewRaccoon toolbar icon**
+  - Check page gating and toolbar insertion in `contentScript.js` (`is_proper_page`, `is_new_view`, `.pr-review-tools` lookup, first-child insertion).
+- **Toolbar icon shows fallback emoji instead of raccoon image**
+  - Verify `contentScript.js` -> `background.js` message path for `contentScriptQuery: "get_icon_data_url"`.
+  - Verify `background.js` `get_icon_data_url()` can fetch `images/raccoon_32.png` and return valid `data:image/png;base64,...`.
 - **Button exists but no highlighted blocks**
   - Check message path `contentScript.js` -> `background.js`.
   - Verify `.diff` fetch and `/moved-blocks` response shape.
+- **Toolbar icon click reopens popup immediately after close**
+  - Check popup port lifecycle in `popup.js` (`chrome.runtime.connect({ name: "reviewraccoon-popup" })`).
+  - Check close/open toggle and `POPUP_TOGGLE_GUARD_MS` timing in `background.js`.
 - **Backend returns surprising matches**
   - Inspect `diff_to_added_and_removed_lines`, then `detect_moved_blocks`, then `join_nearby_blocks`, then filters.
 - **Prod issue**
@@ -111,16 +134,18 @@ Important defaults/heuristics:
 
 ## Current inconsistencies and risks (keep this updated)
 
-1. **Content script control-flow risk**
-   - `detect_moves()` checks truthiness of `add_detect_moved_blocks_button()`, but the button function does not clearly return explicit success/failure.
-   - Large `if (is_new_view())` wrapper around substantial logic increases risk of structural regressions.
+1. **GitHub DOM volatility**
+   - Toolbar and diff-line selectors are still brittle across GitHub UI versions (old/new views).
+   - Changes in `.pr-review-tools` structure or diff row layout can silently break injection/marker placement.
 
-2. **Popup branding is outdated**
-   - `popup.html` still contains "GTmetrix Analyzer" text, which does not match ReviewRaccoon branding.
+2. **Popup toggle is timing-sensitive**
+   - Popup close/open toggle depends on runtime port lifecycle plus reopen guard timing.
+   - If Chrome behavior changes, `POPUP_TOGGLE_GUARD_MS` may need retuning.
 
-3. **Icon assets must stay in sync with manifest**
+3. **Icon assets must stay in sync with manifest and background icon loader**
    - `manifest.json` references `plugin/src/chrome-extension/images/raccoon_16|32|48|128.png`.
-   - If icon files are moved or renamed, update both `action.default_icon` and top-level `icons`.
+   - `background.js` also fetches `images/raccoon_32.png` for in-page data URL rendering.
+   - If icon files are moved or renamed, update `action.default_icon`, top-level `icons`, and background icon fetch path.
 
 4. **Plugin test references missing module**
    - `plugin/tests/block_move_detector.test.js` imports `../src/moved_block_detector`, which is absent.

@@ -10,6 +10,7 @@ let isSavingSettings = false;
 let popupLocalError = null;
 let settingsState = "Up to date";
 let latestState = null;
+let popupPort = null;
 
 function runtime_send_message(message) {
   return new Promise((resolve) => {
@@ -350,6 +351,17 @@ async function copy_diagnostics() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    popupPort = chrome.runtime.connect({ name: "reviewraccoon-popup" });
+    popupPort.onMessage.addListener((message) => {
+      if (message && message.type === "close_popup") {
+        window.close();
+      }
+    });
+  } catch (_connect_error) {
+    popupPort = null;
+  }
+
   let settingsToggleEl = document.getElementById("settingsToggle");
   let settingsSectionEl = document.getElementById("settingsSection");
   let saveSettingsButtonEl = document.getElementById("saveSettingsButton");
@@ -410,5 +422,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 window.addEventListener("unload", () => {
   if (refreshTimer !== null) {
     clearInterval(refreshTimer);
+  }
+  if (popupPort) {
+    try {
+      popupPort.disconnect();
+    } catch (_disconnect_error) {
+      // Ignore disconnect errors during popup teardown.
+    }
+    popupPort = null;
   }
 });

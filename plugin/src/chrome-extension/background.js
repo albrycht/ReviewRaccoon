@@ -5,6 +5,10 @@ const MIN_LINES_STORAGE_KEY = "detect-moved-blocks__min-lines-count";
 const DEFAULT_MIN_LINES_COUNT = 2;
 const MAX_BADGE_COUNT = 999;
 const tabState = new Map();
+const popupPorts = new Set();
+const POPUP_TOGGLE_GUARD_MS = 500;
+let lastPopupClosedAt = 0;
+let iconDataUrlPromise = null;
 
 function create_default_state() {
   return {
@@ -171,6 +175,36 @@ function make_error_state(phase, subPhase, reasonCode, errorMessage) {
     reasonCode: reasonCode || "unknown_error",
     errorMessage: errorMessage || "Unknown error",
   };
+}
+
+function array_buffer_to_base64(buffer) {
+  let bytes = new Uint8Array(buffer);
+  let chunk_size = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunk_size) {
+    let chunk = bytes.subarray(i, i + chunk_size);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
+async function get_icon_data_url() {
+  if (!iconDataUrlPromise) {
+    iconDataUrlPromise = (async () => {
+      let icon_url = chrome.runtime.getURL("images/raccoon_32.png");
+      let response = await fetch(icon_url);
+      if (!response.ok) {
+        throw new Error(`Icon fetch failed with status ${response.status}`);
+      }
+      let buffer = await response.arrayBuffer();
+      let base64 = array_buffer_to_base64(buffer);
+      return `data:image/png;base64,${base64}`;
+    })().catch((error) => {
+      iconDataUrlPromise = null;
+      throw error;
+    });
+  }
+  return iconDataUrlPromise;
 }
 
 async function handle_diff_text_request(request, sender, sendResponse) {
@@ -371,6 +405,17 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   tabState.delete(tabId);
 });
 
+chrome.runtime.onConnect.addListener((port) => {
+  if (!port || port.name !== "reviewraccoon-popup") {
+    return;
+  }
+  popupPorts.add(port);
+  port.onDisconnect.addListener(() => {
+    popupPorts.delete(port);
+    lastPopupClosedAt = Date.now();
+  });
+});
+
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (!changeInfo.url && changeInfo.status !== "loading") {
     return;
@@ -444,6 +489,49 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
       let saved_state = await update_tab_state(tab_id, state);
       sendResponse({ ok: true, state: saved_state });
+      return;
+    }
+
+    if (request.contentScriptQuery === "open_popup") {
+      if (popupPorts.size > 0) {
+        for (let port of popupPorts) {
+          try {
+            port.postMessage({ type: "close_popup" });
+          } catch (_port_error) {
+            // Ignore disconnected popup ports; onDisconnect will clean them up.
+          }
+        }
+        sendResponse({ ok: true, toggled: "closed" });
+        return;
+      }
+      if (Date.now() - lastPopupClosedAt < POPUP_TOGGLE_GUARD_MS) {
+        // The page click closed popup first; prevent immediate reopen.
+        sendResponse({ ok: true, toggled: "closed_recently" });
+        return;
+      }
+      try {
+        await chrome.action.openPopup();
+        sendResponse({ ok: true, toggled: "opened" });
+        return;
+      } catch (_open_error) {
+        try {
+          await chrome.tabs.create({ url: chrome.runtime.getURL("popup.html"), active: true });
+          sendResponse({ ok: true, fallback: "tab" });
+          return;
+        } catch (fallback_error) {
+          sendResponse({ ok: false, error: to_error_message(fallback_error) });
+          return;
+        }
+      }
+    }
+
+    if (request.contentScriptQuery === "get_icon_data_url") {
+      try {
+        let data_url = await get_icon_data_url();
+        sendResponse({ ok: true, dataUrl: data_url });
+      } catch (error) {
+        sendResponse({ ok: false, error: to_error_message(error) });
+      }
       return;
     }
 

@@ -331,15 +331,10 @@ function update_background_state(state) {
     );
 }
 
-const FIRST_RUN_HINT_STORAGE_KEY = "reviewraccoon__first_run_hint_shown";
-
 function get_detect_button_refs() {
     return {
         button: document.querySelector("#detect_moved_blocks"),
-        label: document.querySelector("#detect_moved_blocks_label"),
-        counter: document.querySelector("#detected_moves_counter"),
-        loading: document.querySelector("#detected_moves_loading_animation"),
-        status: document.querySelector("#detected_moves_status"),
+        badge: document.querySelector("#detected_moves_counter"),
     };
 }
 
@@ -350,60 +345,62 @@ function set_detect_button_state(state, payload = {}) {
     }
 
     let count = Number.isFinite(payload.count) ? payload.count : 0;
-    let message = payload.message || "";
-    refs.button.disabled = state === "running";
-
-    if (refs.loading) {
-        refs.loading.style.display = state === "running" ? "inline-block" : "none";
-    }
-
-    if (refs.counter) {
-        if (state === "success" || state === "no_results") {
-            refs.counter.innerText = count;
-            refs.counter.style.display = "inline-block";
-        } else {
-            refs.counter.style.display = "none";
-        }
-    }
-
-    if (refs.status) {
-        refs.status.className = "rr-inline-status";
-        if (state === "success") {
-            refs.status.classList.add("rr-inline-status-success");
+    if (refs.badge) {
+        refs.badge.className = "rr-detect-badge";
+        if (state === "running") {
+            refs.badge.innerText = "…";
+            refs.badge.classList.add("rr-detect-badge-running");
+            refs.badge.style.display = "inline-flex";
         } else if (state === "error") {
-            refs.status.classList.add("rr-inline-status-error");
+            refs.badge.innerText = "!";
+            refs.badge.classList.add("rr-detect-badge-error");
+            refs.badge.style.display = "inline-flex";
+        } else if (state === "success" || state === "no_results") {
+            refs.badge.innerText = String(count);
+            refs.badge.classList.add("rr-detect-badge-success");
+            refs.badge.style.display = "inline-flex";
         } else {
-            refs.status.classList.add("rr-inline-status-info");
+            refs.badge.style.display = "none";
         }
-        refs.status.textContent = message;
-        refs.status.style.display = message ? "block" : "none";
-    }
-
-    if (!refs.label) {
-        return;
-    }
-    if (state === "running") {
-        refs.label.textContent = "Detecting...";
-    } else if (state === "success") {
-        refs.label.textContent = `Found ${count}`;
-    } else if (state === "error") {
-        refs.label.textContent = "Retry detection";
-    } else if (state === "no_results") {
-        refs.label.textContent = "No moved blocks";
-    } else {
-        refs.label.textContent = "Detect moved blocks";
     }
 }
 
-function maybe_show_first_run_hint() {
-    let shown = localStorage.getItem(FIRST_RUN_HINT_STORAGE_KEY);
-    if (shown) {
-        return;
-    }
-    set_detect_button_state("info", {
-        message: "Tip: click a marker to jump to the matching location.",
+function open_extension_popup() {
+    return new Promise((resolve) => {
+        chrome.runtime.sendMessage(
+            {
+                contentScriptQuery: "open_popup",
+            },
+            (response) => {
+                if (chrome.runtime.lastError) {
+                    resolve({ ok: false, error: chrome.runtime.lastError.message });
+                    return;
+                }
+                resolve(response || { ok: false, error: "No response from background." });
+            }
+        );
     });
-    localStorage.setItem(FIRST_RUN_HINT_STORAGE_KEY, "1");
+}
+
+function request_icon_data_url() {
+    return new Promise((resolve) => {
+        chrome.runtime.sendMessage(
+            {
+                contentScriptQuery: "get_icon_data_url",
+            },
+            (response) => {
+                if (chrome.runtime.lastError) {
+                    resolve(null);
+                    return;
+                }
+                if (!response || !response.ok || !response.dataUrl) {
+                    resolve(null);
+                    return;
+                }
+                resolve(response.dataUrl);
+            }
+        );
+    });
 }
 
 function get_user_name() {
@@ -482,22 +479,6 @@ async function add_detect_moved_blocks_button() {
         if (button_container === null) {
             return  // TODO this is workaround - you should add proper box for this button!
         }
-        let loading_animation = htmlToElement(`
-    <div id="detected_moves_loading_animation" style="display: inline-block;">
-      <svg version="1.1" id="L4" x="0px" y="0px" viewBox="0 0 100 100" enable-background="new 0 0 0 0" 
-        style="width: 20px; height: 20px; display: inline-block; vertical-align: middle;" 
-      >
-        <circle fill="#000" stroke="none" cx="6" cy="50" r="8">
-          <animate attributeName="opacity" dur="1s" values="0;1;0" repeatCount="indefinite" begin="0.1"></animate>
-        </circle>
-        <circle fill="#000" stroke="none" cx="36" cy="50" r="8">
-          <animate attributeName="opacity" dur="1s" values="0;1;0" repeatCount="indefinite" begin="0.2"></animate>
-        </circle>
-        <circle fill="#000" stroke="none" cx="66" cy="50" r="8">
-          <animate attributeName="opacity" dur="1s" values="0;1;0" repeatCount="indefinite" begin="0.3"></animate>
-        </circle>
-      </svg>
-    </div>`);
         let container = document.createElement("div");
         container.className = "diffbar-item details-reset position-relative text-center";
         if (is_new_view()) {
@@ -507,33 +488,46 @@ async function add_detect_moved_blocks_button() {
         }
 
         let button = document.createElement("button");
-        button.className = "btn btn-sm";
+        button.className = "rr-detect-button mr-3";
         button.id = "detect_moved_blocks";
         button.type = "button";
-        button.appendChild(loading_animation);
-        button.appendChild(htmlToElement('<span class="Counter" style="display: none; margin-right: 4px;" id="detected_moves_counter"></span>'));
-        button.appendChild(htmlToElement('<span id="detect_moved_blocks_label" style="margin-right: 4px;">Detect moved blocks</span>'));
-        button.title = "Configure detection settings in the extension popup.";
-        button.addEventListener("click", () => {
-            run_detection("manual");
+        button.title = "Open ReviewRaccoon";
+        button.setAttribute("aria-label", "Open ReviewRaccoon popup");
+        button.innerHTML = `
+            <img class="rr-detect-icon" alt="" style="display:none;" />
+            <span class="rr-detect-icon-fallback" aria-hidden="true">🦝</span>
+            <span id="detected_moves_counter" class="rr-detect-badge" style="display: none;">0</span>
+        `;
+        let icon_img = button.querySelector(".rr-detect-icon");
+        let icon_fallback = button.querySelector(".rr-detect-icon-fallback");
+        if (icon_img && icon_fallback) {
+            icon_img.addEventListener("error", () => {
+                icon_img.style.display = "none";
+                icon_fallback.style.display = "inline-flex";
+            });
+            icon_img.addEventListener("load", () => {
+                icon_fallback.style.display = "none";
+            });
+            request_icon_data_url().then((icon_data_url) => {
+                if (!icon_data_url) {
+                    icon_img.style.display = "none";
+                    icon_fallback.style.display = "inline-flex";
+                    return;
+                }
+                icon_img.src = icon_data_url;
+                icon_img.style.display = "block";
+            });
+        }
+        button.addEventListener("click", async () => {
+            let response = await open_extension_popup();
+            if (!response || !response.ok) {
+                set_detect_button_state("error");
+            }
         });
         container.appendChild(button);
-        container.appendChild(htmlToElement('<div id="detected_moves_status" class="rr-inline-status rr-inline-status-info" style="display:none;"></div>'));
-        container.appendChild(
-            htmlToElement(
-                `<details id="reviewraccoon_help_legend" class="rr-help-legend">
-                    <summary>What do markers mean?</summary>
-                    <p>Colored bars mark moved blocks. Click a bar to jump to the matching location.</p>
-                </details>`
-            )
-        );
 
-        if (is_new_view()) {
-            // Prepend to the container to be on the left of the "Review changes" button
-            button_container.insertBefore(container, button_container.firstChild);
-        } else {
-            button_container.appendChild(container);
-        }
+        // Keep ReviewRaccoon as the first right-side control.
+        button_container.insertBefore(container, button_container.firstElementChild || null);
         set_detect_button_state("idle", {});
         return true;
     }
@@ -570,17 +564,6 @@ async function add_detect_moved_blocks_button() {
 
     function highlights_changes(detected_blocks) {
         console.log(`Received ${detected_blocks.length} detected blocks`);
-
-        let loading_animation = document.querySelector("#detected_moves_loading_animation");
-        if (loading_animation !== null) {
-            loading_animation.style.display = "none";
-        }
-        let counter = document.querySelector("#detected_moves_counter");
-        if (counter !== null) {
-            counter.innerText = detected_blocks.length;
-            counter.style.display = "inline-block";
-        }
-
         let marked_lines_count = 0;
         for (const iter of detected_blocks.entries()) {
             let [block_index, detected_block] = iter;
@@ -594,9 +577,7 @@ async function add_detect_moved_blocks_button() {
             return
         }
         if (!is_proper_page()) {
-            set_detect_button_state("info", {
-                message: "Open a PR files or commit page to run detection.",
-            });
+            set_detect_button_state("idle");
             update_background_state({
                 phase: "precheck",
                 status: "not_supported_page",
@@ -612,9 +593,7 @@ async function add_detect_moved_blocks_button() {
         }
         detection_started = true;
         try {
-            set_detect_button_state("running", {
-                message: "ReviewRaccoon is analyzing this diff...",
-            });
+            set_detect_button_state("running");
             await wait_for_page_load();
             await expand_large_diffs();
             let min_lines_count = await get_min_lines_count_or_default();
@@ -624,13 +603,7 @@ async function add_detect_moved_blocks_button() {
                 let user_name = get_user_name();
                 let response = await request_detected_blocks(page_url, user_name, min_lines_count);
                 if (!response || !response.ok) {
-                    let message = "Detection failed. Open the extension popup for details.";
-                    if (response && response.error && response.error.errorMessage) {
-                        message = response.error.errorMessage;
-                    }
-                    set_detect_button_state("error", {
-                        message: message,
-                    });
+                    set_detect_button_state("error");
                     return;
                 }
                 try {
@@ -644,9 +617,7 @@ async function add_detect_moved_blocks_button() {
                             reasonCode: "render_dom_lookup_failed",
                             errorMessage: "Could not locate matching diff lines in GitHub DOM.",
                         });
-                        set_detect_button_state("error", {
-                            message: "Could not place markers in GitHub UI. See popup details.",
-                        });
+                        set_detect_button_state("error");
                         return;
                     }
                     update_background_state({
@@ -655,15 +626,9 @@ async function add_detect_moved_blocks_button() {
                         blockCount: detected_blocks.length,
                     });
                     if (detected_blocks.length === 0) {
-                        set_detect_button_state("no_results", {
-                            count: 0,
-                            message: "No moved blocks found. Try lowering Min lines in block.",
-                        });
+                        set_detect_button_state("no_results", { count: 0 });
                     } else {
-                        set_detect_button_state("success", {
-                            count: detected_blocks.length,
-                            message: `Found ${detected_blocks.length} moved block${detected_blocks.length === 1 ? "" : "s"}. Click markers to jump between matches.`,
-                        });
+                        set_detect_button_state("success", { count: detected_blocks.length });
                     }
                 } catch (error) {
                     update_background_state({
@@ -673,9 +638,7 @@ async function add_detect_moved_blocks_button() {
                         reasonCode: "render_apply_error",
                         errorMessage: error && error.message ? error.message : String(error),
                     });
-                    set_detect_button_state("error", {
-                        message: "Could not render highlights. Open popup for details.",
-                    });
+                    set_detect_button_state("error");
                 }
             } else {
                 console.log("min_lines_count is smaller than 0 - detection disabled.");
@@ -686,9 +649,7 @@ async function add_detect_moved_blocks_button() {
                     errorMessage: null,
                     blockCount: 0,
                 });
-                set_detect_button_state("info", {
-                    message: "Detection is disabled in popup settings.",
-                });
+                set_detect_button_state("idle");
             }
         } finally {
             detection_started = false;
@@ -705,7 +666,6 @@ async function add_detect_moved_blocks_button() {
         }
         if (!auto_detection_done) {
             auto_detection_done = true;
-            maybe_show_first_run_hint();
             run_detection();
         }
     }
