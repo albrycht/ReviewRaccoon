@@ -3,6 +3,8 @@
 const REVIEWRACCOON_API_URL = "https://reviewraccoon.com/moved-blocks";
 const MIN_LINES_STORAGE_KEY = "detect-moved-blocks__min-lines-count";
 const DEFAULT_MIN_LINES_COUNT = 2;
+const EXPAND_ALL_LARGE_DIFFS_STORAGE_KEY = "detect-moved-blocks__expand-all-large-diffs";
+const DEFAULT_EXPAND_ALL_LARGE_DIFFS = true;
 const MAX_BADGE_COUNT = 999;
 const tabState = new Map();
 const popupPorts = new Set();
@@ -19,6 +21,7 @@ function create_default_state() {
     reasonCode: null,
     errorMessage: null,
     minLinesCount: DEFAULT_MIN_LINES_COUNT,
+    expandAllLargeDiffs: DEFAULT_EXPAND_ALL_LARGE_DIFFS,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -32,11 +35,25 @@ function to_error_message(error) {
 
 function is_supported_github_diff_page(url) {
   if (!url || typeof url !== "string") return false;
-  return /https:\/\/github\.com\/[^/]+\/[^/]+\/(pull\/\d+\/files|commits?\/[A-Za-z0-9]+)/.test(url);
+  return /https:\/\/github\.com\/[^/]+\/[^/]+\/(pull\/\d+\/files|pull\/\d+\/commits?\/[A-Za-z0-9]+|commits?\/[A-Za-z0-9]+)/.test(
+    url
+  );
 }
 
 function get_repo_params_from_url(url) {
   if (!url) return null;
+
+  let pr_commit_match = url.match(
+    /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)\/commits?\/([A-Za-z0-9]+)(?:\/.*)?$/
+  );
+  if (pr_commit_match) {
+    return {
+      user_name: pr_commit_match[1],
+      repo_name: pr_commit_match[2],
+      pull_number: pr_commit_match[3],
+      commit_hash: pr_commit_match[4],
+    };
+  }
 
   let pr_match = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/.*)?$/);
   if (pr_match) {
@@ -77,6 +94,11 @@ function normalize_min_lines_count(value) {
   return parsed;
 }
 
+function normalize_expand_all_large_diffs(value) {
+  if (typeof value === "boolean") return value;
+  return DEFAULT_EXPAND_ALL_LARGE_DIFFS;
+}
+
 async function get_min_lines_count_setting() {
   let result = await chrome.storage.local.get([MIN_LINES_STORAGE_KEY]);
   return normalize_min_lines_count(result[MIN_LINES_STORAGE_KEY]);
@@ -86,6 +108,28 @@ async function set_min_lines_count_setting(value) {
   let normalized = normalize_min_lines_count(value);
   await chrome.storage.local.set({ [MIN_LINES_STORAGE_KEY]: normalized });
   return normalized;
+}
+
+async function get_expand_all_large_diffs_setting() {
+  let result = await chrome.storage.local.get([EXPAND_ALL_LARGE_DIFFS_STORAGE_KEY]);
+  return normalize_expand_all_large_diffs(result[EXPAND_ALL_LARGE_DIFFS_STORAGE_KEY]);
+}
+
+async function set_expand_all_large_diffs_setting(value) {
+  let normalized = normalize_expand_all_large_diffs(value);
+  await chrome.storage.local.set({ [EXPAND_ALL_LARGE_DIFFS_STORAGE_KEY]: normalized });
+  return normalized;
+}
+
+async function get_settings_snapshot() {
+  let [min_lines_count, expand_all_large_diffs] = await Promise.all([
+    get_min_lines_count_setting(),
+    get_expand_all_large_diffs_setting(),
+  ]);
+  return {
+    minLinesCount: min_lines_count,
+    expandAllLargeDiffs: expand_all_large_diffs,
+  };
 }
 
 async function set_badge_for_tab(tabId, state) {
@@ -130,7 +174,7 @@ async function update_tab_state(tabId, patch) {
 }
 
 async function get_or_create_tab_state(tabId, tabUrl) {
-  let min_lines_count = await get_min_lines_count_setting();
+  let settings = await get_settings_snapshot();
   let existing = tabState.get(tabId);
   if (existing && !is_supported_github_diff_page(tabUrl)) {
     let downgraded = {
@@ -141,7 +185,8 @@ async function get_or_create_tab_state(tabId, tabUrl) {
       blockCount: 0,
       reasonCode: null,
       errorMessage: null,
-      minLinesCount: min_lines_count,
+      minLinesCount: settings.minLinesCount,
+      expandAllLargeDiffs: settings.expandAllLargeDiffs,
     };
     tabState.set(tabId, downgraded);
     await set_badge_for_tab(tabId, downgraded);
@@ -150,13 +195,15 @@ async function get_or_create_tab_state(tabId, tabUrl) {
   if (existing) {
     return {
       ...existing,
-      minLinesCount: min_lines_count,
+      minLinesCount: settings.minLinesCount,
+      expandAllLargeDiffs: settings.expandAllLargeDiffs,
     };
   }
 
   let initial = {
     ...create_default_state(),
-    minLinesCount: min_lines_count,
+    minLinesCount: settings.minLinesCount,
+    expandAllLargeDiffs: settings.expandAllLargeDiffs,
   };
   if (!is_supported_github_diff_page(tabUrl)) {
     initial.phase = "precheck";
@@ -210,7 +257,8 @@ async function get_icon_data_url() {
 async function handle_diff_text_request(request, sender, sendResponse) {
   let tab_id = sender && sender.tab ? sender.tab.id : undefined;
   let page_url = request.pull_request_url || (sender && sender.tab ? sender.tab.url : "");
-  let min_lines_count = await get_min_lines_count_setting();
+  let settings = await get_settings_snapshot();
+  let min_lines_count = settings.minLinesCount;
 
   if (typeof tab_id !== "number") {
     sendResponse({
@@ -227,6 +275,7 @@ async function handle_diff_text_request(request, sender, sendResponse) {
     reasonCode: null,
     errorMessage: null,
     minLinesCount: min_lines_count,
+    expandAllLargeDiffs: settings.expandAllLargeDiffs,
   });
 
   if (!is_supported_github_diff_page(page_url)) {
@@ -420,7 +469,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (!changeInfo.url && changeInfo.status !== "loading") {
     return;
   }
-  let min_lines_count = await get_min_lines_count_setting();
+  let settings = await get_settings_snapshot();
   if (!is_supported_github_diff_page(tab.url || "")) {
     await update_tab_state(tabId, {
       phase: "precheck",
@@ -429,7 +478,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       blockCount: 0,
       reasonCode: null,
       errorMessage: null,
-      minLinesCount: min_lines_count,
+      minLinesCount: settings.minLinesCount,
+      expandAllLargeDiffs: settings.expandAllLargeDiffs,
     });
   } else {
     await update_tab_state(tabId, {
@@ -439,7 +489,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       blockCount: 0,
       reasonCode: null,
       errorMessage: null,
-      minLinesCount: min_lines_count,
+      minLinesCount: settings.minLinesCount,
+      expandAllLargeDiffs: settings.expandAllLargeDiffs,
     });
   }
 });
@@ -552,6 +603,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         await update_tab_state(request.tabId, { minLinesCount: min_lines_count });
       }
       sendResponse({ ok: true, minLinesCount: min_lines_count });
+      return;
+    }
+
+    if (request.popupQuery === "set_settings") {
+      let min_lines_count = await set_min_lines_count_setting(request.minLinesCount);
+      let expand_all_large_diffs = await set_expand_all_large_diffs_setting(request.expandAllLargeDiffs);
+      if (typeof request.tabId === "number" && tabState.has(request.tabId)) {
+        await update_tab_state(request.tabId, {
+          minLinesCount: min_lines_count,
+          expandAllLargeDiffs: expand_all_large_diffs,
+        });
+      }
+      sendResponse({
+        ok: true,
+        minLinesCount: min_lines_count,
+        expandAllLargeDiffs: expand_all_large_diffs,
+      });
       return;
     }
 

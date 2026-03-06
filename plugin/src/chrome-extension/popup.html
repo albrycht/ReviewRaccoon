@@ -37,6 +37,16 @@
         <label for="minLinesInput" class="settingsLabel">Min lines in block</label>
         <input id="minLinesInput" class="settingsInput" type="number" step="1">
         <p class="settingsHint">Set to -1 to turn detection off.</p>
+        <div class="settingsToggleRow">
+          <div class="settingsToggleText">
+            <label for="expandLargeDiffsToggle" class="settingsLabel settingsLabelInline">Expand all large diffs</label>
+            <p class="settingsHint settingsHintInline">If off, only files with detected moved blocks are expanded.</p>
+          </div>
+          <label class="switch" for="expandLargeDiffsToggle">
+            <input id="expandLargeDiffsToggle" type="checkbox" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
         <div class="settingsStateRow">
           <span class="settingsStateLabel">Settings state</span>
           <span id="settingsStateValue" class="settingsStateValue">Up to date</span>

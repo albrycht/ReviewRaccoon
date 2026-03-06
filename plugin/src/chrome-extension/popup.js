@@ -1,6 +1,7 @@
 "use strict";
 
 const REFRESH_INTERVAL_MS = 1500;
+const DEFAULT_EXPAND_ALL_LARGE_DIFFS = true;
 
 let activeTabId = null;
 let activeTabUrl = "";
@@ -179,6 +180,7 @@ function render_state(state) {
   let updatedAtEl = document.getElementById("updatedAtValue");
   let settingsStateEl = document.getElementById("settingsStateValue");
   let minLinesInputEl = document.getElementById("minLinesInput");
+  let expandLargeDiffsToggleEl = document.getElementById("expandLargeDiffsToggle");
   let runNowButtonEl = document.getElementById("runNowButton");
   let retryButtonEl = document.getElementById("retryButton");
   let openPageButtonEl = document.getElementById("openPageButton");
@@ -203,6 +205,8 @@ function render_state(state) {
 
   if (!settingsDirty && !isSavingSettings) {
     minLinesInputEl.value = Number.isFinite(state.minLinesCount) ? String(state.minLinesCount) : "2";
+    expandLargeDiffsToggleEl.checked =
+      typeof state.expandAllLargeDiffs === "boolean" ? state.expandAllLargeDiffs : DEFAULT_EXPAND_ALL_LARGE_DIFFS;
   }
 
   if (popupLocalError) {
@@ -242,6 +246,7 @@ async function refresh_popup_state() {
       errorMessage: response.error || "Failed to read extension state.",
       updatedAt: new Date().toISOString(),
       minLinesCount: 2,
+      expandAllLargeDiffs: DEFAULT_EXPAND_ALL_LARGE_DIFFS,
     });
     return;
   }
@@ -253,11 +258,13 @@ async function save_settings() {
     return;
   }
   let inputEl = document.getElementById("minLinesInput");
+  let expandLargeDiffsToggleEl = document.getElementById("expandLargeDiffsToggle");
   let saveButtonEl = document.getElementById("saveSettingsButton");
   let value = Number.parseFloat(inputEl.value);
   if (Number.isNaN(value)) {
     value = 2;
   }
+  let expand_all_large_diffs = expandLargeDiffsToggleEl.checked;
 
   isSavingSettings = true;
   settingsState = "Saving...";
@@ -271,11 +278,13 @@ async function save_settings() {
     reasonCode: null,
     updatedAt: new Date().toISOString(),
     minLinesCount: value,
+    expandAllLargeDiffs: expand_all_large_diffs,
   });
 
   let response = await runtime_send_message({
-    popupQuery: "set_min_lines_count",
-    value: value,
+    popupQuery: "set_settings",
+    minLinesCount: value,
+    expandAllLargeDiffs: expand_all_large_diffs,
     tabId: activeTabId,
   });
 
@@ -370,6 +379,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   let openPageButtonEl = document.getElementById("openPageButton");
   let copyDiagButtonEl = document.getElementById("copyDiagButton");
   let minLinesInputEl = document.getElementById("minLinesInput");
+  let expandLargeDiffsToggleEl = document.getElementById("expandLargeDiffsToggle");
 
   settingsToggleEl.addEventListener("click", () => {
     settingsSectionEl.classList.toggle("hidden");
@@ -391,6 +401,22 @@ document.addEventListener("DOMContentLoaded", async () => {
       reasonCode: null,
       updatedAt: new Date().toISOString(),
       minLinesCount: Number.parseFloat(minLinesInputEl.value),
+      expandAllLargeDiffs: expandLargeDiffsToggleEl.checked,
+    });
+  });
+  expandLargeDiffsToggleEl.addEventListener("change", () => {
+    settingsDirty = true;
+    settingsState = "Unsaved changes";
+    popupLocalError = null;
+    render_state(latestState || {
+      status: "idle",
+      blockCount: 0,
+      phase: "idle",
+      subPhase: null,
+      reasonCode: null,
+      updatedAt: new Date().toISOString(),
+      minLinesCount: Number.parseFloat(minLinesInputEl.value),
+      expandAllLargeDiffs: expandLargeDiffsToggleEl.checked,
     });
   });
 
@@ -405,6 +431,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       errorMessage: "Could not determine active tab.",
       updatedAt: new Date().toISOString(),
       minLinesCount: 2,
+      expandAllLargeDiffs: DEFAULT_EXPAND_ALL_LARGE_DIFFS,
     });
     return;
   }

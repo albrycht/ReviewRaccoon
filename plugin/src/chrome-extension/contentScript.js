@@ -6,6 +6,8 @@ globalThis.__reviewRaccoonContentScriptLoaded = true;
 
 const REMOVED = "removed";
 const ADDED = "added";
+const EXPAND_ALL_LARGE_DIFFS_STORAGE_KEY = "detect-moved-blocks__expand-all-large-diffs";
+const DEFAULT_EXPAND_ALL_LARGE_DIFFS = true;
 const ALL_COLORS = ['#058DC7', '#50B432', '#ED561B', '#DDDF00', '#24CBE5', '#64E572', '#FF9655', '#FFF263', '#6AF9C4',
     'red', 'orange', 'green', 'blue', 'purple', 'brown'];
 
@@ -20,8 +22,18 @@ function is_new_view() {
 let filepath_to_anchor = {};
 
 let timer = null;
+let url_watch_timer = null;
 let detection_started = false;
 let auto_detection_done = false;
+let last_seen_url = window.location.href;
+let last_known_page_supported = null;
+
+const DETECT_MOVES_INTERVAL_MS = 3000;
+const URL_POLL_INTERVAL_MS = 500;
+const NAVIGATION_EVENT_NAME = "reviewraccoon:navigation";
+const DIFF_SETTLE_POLL_INTERVAL_MS = 100;
+const DIFF_SETTLE_QUIET_PERIOD_MS = 600;
+const DIFF_SETTLE_TIMEOUT_MS = 20000;
 
 function insertAfter(newNode, referenceNode) {
     referenceNode.parentNode.insertBefore(newNode, referenceNode.nextSibling);
@@ -306,6 +318,19 @@ function detect_moved_block_button_exists() {
     return existing_button !== null;
 }
 
+function remove_detect_moved_blocks_button() {
+    let button = document.querySelector("#detect_moved_blocks");
+    if (!button) {
+        return;
+    }
+    let container = button.closest(".diffbar-item");
+    if (container) {
+        container.remove();
+        return;
+    }
+    button.remove();
+}
+
 function get_min_lines_count_or_default() {
     return new Promise((resolve) => {
         chrome.storage.local.get(['detect-moved-blocks__min-lines-count'], (result) => {
@@ -314,6 +339,19 @@ function get_min_lines_count_or_default() {
                 min_lines_count = 2;
             }
             resolve(min_lines_count);
+        });
+    });
+}
+
+function get_expand_all_large_diffs_or_default() {
+    return new Promise((resolve) => {
+        chrome.storage.local.get([EXPAND_ALL_LARGE_DIFFS_STORAGE_KEY], (result) => {
+            let expand_all_large_diffs = result[EXPAND_ALL_LARGE_DIFFS_STORAGE_KEY];
+            if (typeof expand_all_large_diffs === "boolean") {
+                resolve(expand_all_large_diffs);
+                return;
+            }
+            resolve(DEFAULT_EXPAND_ALL_LARGE_DIFFS);
         });
     });
 }
@@ -537,29 +575,182 @@ async function add_detect_moved_blocks_button() {
     }
 
 
-    async function expand_large_diffs() {
-        let load_diff_buttons = document.querySelectorAll(".load-diff-button");
+    function get_pending_diff_loader_count() {
+        return document.querySelectorAll("div.js-diff-progressive-container include-fragment.diff-progressive-loader, include-fragment.diff-progressive-loader").length;
+    }
+
+    async function wait_for_diff_content_to_settle(timeout_ms = DIFF_SETTLE_TIMEOUT_MS) {
+        let started_at = Date.now();
+        let stable_for_ms = 0;
+        let last_snapshot = null;
+        while (Date.now() - started_at < timeout_ms) {
+            let pending_loader_count = get_pending_diff_loader_count();
+            let load_button_count = document.querySelectorAll(".load-diff-button").length;
+            let snapshot = `${pending_loader_count}:${load_button_count}`;
+            if (snapshot === last_snapshot) {
+                stable_for_ms += DIFF_SETTLE_POLL_INTERVAL_MS;
+            } else {
+                stable_for_ms = 0;
+                last_snapshot = snapshot;
+            }
+            if (pending_loader_count === 0 && stable_for_ms >= DIFF_SETTLE_QUIET_PERIOD_MS) {
+                return true;
+            }
+            await sleep(DIFF_SETTLE_POLL_INTERVAL_MS);
+        }
+        console.log(`Timed out waiting for diff content to settle after ${timeout_ms}ms.`);
+        return false;
+    }
+
+    async function wait_for_page_load() {
+        await wait_for_diff_content_to_settle();
+    }
+
+    function css_escape(value) {
+        if (window.CSS && typeof window.CSS.escape === "function") {
+            return window.CSS.escape(value);
+        }
+        return String(value).replace(/["\\]/g, "\\$&");
+    }
+
+    function get_filepaths_with_detected_blocks(detected_blocks) {
+        let filepaths = new Set();
+        for (const detected_block of detected_blocks || []) {
+            let lines = Array.isArray(detected_block.lines) ? detected_block.lines : [];
+            for (const matching_lines of lines) {
+                if (matching_lines && matching_lines.removed_line && matching_lines.removed_line.file) {
+                    filepaths.add(matching_lines.removed_line.file);
+                }
+                if (matching_lines && matching_lines.added_line && matching_lines.added_line.file) {
+                    filepaths.add(matching_lines.added_line.file);
+                }
+            }
+        }
+        return filepaths;
+    }
+
+    function get_targeted_load_diff_buttons(filepaths_with_blocks) {
+        let buttons = new Set();
+        for (const filepath of filepaths_with_blocks) {
+            let escaped_filepath = css_escape(filepath);
+            let old_view_buttons = document.querySelectorAll(
+                `.file-header[data-path="${escaped_filepath}"] .load-diff-button, .file[data-path="${escaped_filepath}"] .load-diff-button`
+            );
+            for (const button of old_view_buttons) {
+                buttons.add(button);
+            }
+            let new_view_container = get_file_container_new_view(filepath);
+            if (new_view_container) {
+                let new_view_buttons = new_view_container.querySelectorAll(".load-diff-button");
+                for (const button of new_view_buttons) {
+                    buttons.add(button);
+                }
+            }
+        }
+        return Array.from(buttons);
+    }
+
+    async function expand_large_diffs(detected_blocks, expand_all_large_diffs) {
+        let load_diff_buttons = [];
+        if (expand_all_large_diffs) {
+            load_diff_buttons = Array.from(document.querySelectorAll(".load-diff-button"));
+        } else {
+            let filepaths_with_blocks = get_filepaths_with_detected_blocks(detected_blocks);
+            if (filepaths_with_blocks.size === 0) {
+                console.log("Skipping large-diff expansion: no moved blocks detected.");
+                return 0;
+            }
+            load_diff_buttons = get_targeted_load_diff_buttons(filepaths_with_blocks);
+        }
         for (const load_diff_button of load_diff_buttons) {
             load_diff_button.click();
         }
         if (load_diff_buttons.length > 0) {
-            console.log(`Expanded ${load_diff_buttons.length} large diffs`);
-            await sleep(3000);
+            console.log(`Triggered expansion for ${load_diff_buttons.length} large diffs`);
+            await wait_for_diff_content_to_settle();
         }
-    }
-
-    async function wait_for_page_load() {
-        let count = 1;
-        while (count > 0) {
-            count = document.querySelectorAll("div.js-diff-progressive-container include-fragment.diff-progressive-loader").length;
-            await sleep(100);
-        }
-        await sleep(1000);  // just in case
+        return load_diff_buttons.length;
     }
 
     function is_proper_page() {
-        let url_regex = /\/files([^\/].*)?$|\/(commits?\/([^\/].*)?)$/g;
-        return window.location.href.match(url_regex);
+        let pathname = window.location.pathname;
+        return /\/pull\/\d+\/files(?:\/.*)?$|\/pull\/\d+\/commits?\/[A-Za-z0-9]+(?:\/.*)?$|\/commits?\/[A-Za-z0-9]+(?:\/.*)?$/.test(pathname);
+    }
+
+    function reset_detection_context_for_navigation() {
+        filepath_to_anchor = {};
+        filepath_to_container_new = {};
+        detection_started = false;
+        auto_detection_done = false;
+    }
+
+    function sync_background_supported_state() {
+        let supported = is_proper_page();
+        if (last_known_page_supported === supported) {
+            return;
+        }
+        last_known_page_supported = supported;
+        if (!supported) {
+            remove_detect_moved_blocks_button();
+            update_background_state({
+                phase: "precheck",
+                subPhase: null,
+                status: "not_supported_page",
+                reasonCode: null,
+                errorMessage: null,
+                blockCount: 0,
+            });
+            return;
+        }
+        update_background_state({
+            phase: "idle",
+            subPhase: null,
+            status: "idle",
+            reasonCode: null,
+            errorMessage: null,
+            blockCount: 0,
+        });
+    }
+
+    function emit_navigation_event() {
+        window.dispatchEvent(new Event(NAVIGATION_EVENT_NAME));
+    }
+
+    function handle_possible_url_change() {
+        let current_url = window.location.href;
+        if (current_url === last_seen_url) {
+            return;
+        }
+        last_seen_url = current_url;
+        reset_detection_context_for_navigation();
+        sync_background_supported_state();
+        detect_moves();
+    }
+
+    function install_navigation_watchers() {
+        // GitHub uses Turbo/PJAX navigation (history + partial DOM updates), so
+        // we watch history events and keep a short polling fallback.
+        let original_push_state = history.pushState;
+        let original_replace_state = history.replaceState;
+        history.pushState = function (...args) {
+            let result = original_push_state.apply(this, args);
+            emit_navigation_event();
+            return result;
+        };
+        history.replaceState = function (...args) {
+            let result = original_replace_state.apply(this, args);
+            emit_navigation_event();
+            return result;
+        };
+        window.addEventListener("popstate", emit_navigation_event);
+        window.addEventListener("hashchange", emit_navigation_event);
+        window.addEventListener("pjax:end", emit_navigation_event);
+        document.addEventListener("turbo:render", emit_navigation_event);
+        document.addEventListener("turbo:load", emit_navigation_event);
+        window.addEventListener(NAVIGATION_EVENT_NAME, handle_possible_url_change);
+        if (url_watch_timer === null) {
+            url_watch_timer = setInterval(handle_possible_url_change, URL_POLL_INTERVAL_MS);
+        }
     }
 
     function highlights_changes(detected_blocks) {
@@ -595,7 +786,6 @@ async function add_detect_moved_blocks_button() {
         try {
             set_detect_button_state("running");
             await wait_for_page_load();
-            await expand_large_diffs();
             let min_lines_count = await get_min_lines_count_or_default();
             console.log(`Starting detection: min_lines_count=${min_lines_count}`);
             if (min_lines_count >= 0) {
@@ -608,6 +798,8 @@ async function add_detect_moved_blocks_button() {
                 }
                 try {
                     let detected_blocks = response.detectedBlocks || [];
+                    let expand_all_large_diffs = await get_expand_all_large_diffs_or_default();
+                    await expand_large_diffs(detected_blocks, expand_all_large_diffs);
                     let marked_lines_count = highlights_changes(detected_blocks);
                     if (detected_blocks.length > 0 && marked_lines_count === 0) {
                         update_background_state({
@@ -657,6 +849,7 @@ async function add_detect_moved_blocks_button() {
     }
 
     async function detect_moves() {
+        sync_background_supported_state();
         if (!is_proper_page()) {
             return;
         }
@@ -684,7 +877,10 @@ async function add_detect_moved_blocks_button() {
     });
 
     async function main() {
-        timer = setInterval(detect_moves, 3000);
+        install_navigation_watchers();
+        sync_background_supported_state();
+        timer = setInterval(detect_moves, DETECT_MOVES_INTERVAL_MS);
+        detect_moves();
     }
 
     main();

@@ -84,6 +84,9 @@ There is no root build script (`package.json`) or standard CI config in repo roo
 ### Recent extension UX and toolbar behavior (Mar 2026)
 
 - Popup UX is state-driven (`idle`, `running`, `success`, `no_blocks`, `error`, `disabled_by_settings`, `not_supported_page`) with phase/subPhase diagnostics from `background.js`.
+- Popup settings persist in `chrome.storage.local` via `background.js` and currently include:
+  - `detect-moved-blocks__min-lines-count`
+  - `detect-moved-blocks__expand-all-large-diffs` (default `true`, exposed as slider toggle in popup settings)
 - GitHub page control is now an icon-only ReviewRaccoon control in the right toolbar (`.pr-review-tools`), inserted as first item and styled as icon + badge.
 - In-page badge semantics mirror extension badge semantics:
   - running: `…` (blue)
@@ -94,6 +97,15 @@ There is no root build script (`package.json`) or standard CI config in repo roo
   - open -> closes popup via runtime port (`reviewraccoon-popup`) and `close_popup` message
   - a short reopen guard in `background.js` prevents close+immediate-reopen race.
 - Toolbar icon rendering avoids GitHub page CSP issues by requesting a base64 data URL from `background.js` (`contentScriptQuery: "get_icon_data_url"`), instead of directly using `chrome-extension://...` in page DOM.
+- Supported GitHub diff page routes in `background.js` include:
+  - `/pull/<number>/files`
+  - `/pull/<number>/commits/<sha>`
+  - `/commit/<sha>` and `/commits/<sha>`
+- Content-script navigation handling is SPA-aware: it watches History API (`pushState`/`replaceState`), `popstate`, `hashchange`, GitHub Turbo/PJAX events, and a short URL polling fallback. On URL change it resets detection state/caches and re-evaluates page support.
+- Large diff expansion is now detection-aware in `contentScript.js`:
+  - detection fetch runs before expansion, then expansion can target only files that contain detected moved blocks.
+  - default behavior still expands all large diffs (`detect-moved-blocks__expand-all-large-diffs` defaults to `true` in local storage).
+  - post-click waiting uses loader/DOM settle checks (quiet period + timeout), replacing fixed sleep.
 
 ### Debug entry points by symptom
 
