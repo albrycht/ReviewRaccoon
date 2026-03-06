@@ -2,12 +2,14 @@
 
 const REFRESH_INTERVAL_MS = 1500;
 const DEFAULT_EXPAND_ALL_LARGE_DIFFS = true;
+const DEFAULT_DETECTION_ENABLED = true;
 
 let activeTabId = null;
 let activeTabUrl = "";
 let refreshTimer = null;
 let settingsDirty = false;
 let isSavingSettings = false;
+let isUpdatingDetectionEnabled = false;
 let popupLocalError = null;
 let settingsState = "Up to date";
 let latestState = null;
@@ -52,10 +54,17 @@ function format_status(status) {
     success: "Found blocks",
     no_blocks: "No blocks found",
     error: "Needs attention",
-    disabled_by_settings: "Detection disabled",
+    disabled_by_settings: "Paused",
     not_supported_page: "Unsupported page",
   };
   return map[status] || status || "Unknown";
+}
+
+function is_detection_enabled_state(state) {
+  if (!state || typeof state.detectionEnabled !== "boolean") {
+    return DEFAULT_DETECTION_ENABLED;
+  }
+  return state.detectionEnabled;
 }
 
 function get_status_pill_class(status) {
@@ -99,6 +108,24 @@ function format_context(url) {
   }
 }
 
+function render_diff_url(element, diffUrl) {
+  if (!element) {
+    return;
+  }
+  element.textContent = "";
+  if (!diffUrl) {
+    element.textContent = "-";
+    return;
+  }
+  let link = document.createElement("a");
+  link.href = diffUrl;
+  link.textContent = diffUrl;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.className = "technicalLink";
+  element.appendChild(link);
+}
+
 function get_status_headline_and_hint(state) {
   if (state.status === "running") {
     return {
@@ -120,8 +147,8 @@ function get_status_headline_and_hint(state) {
   }
   if (state.status === "disabled_by_settings") {
     return {
-      headline: "Detection is disabled",
-      hint: "Set Min lines in block to 0 or more to enable detection.",
+      headline: "Detection is paused",
+      hint: "Turn on Enable detection to resume moved block analysis.",
     };
   }
   if (state.status === "not_supported_page") {
@@ -169,6 +196,7 @@ function render_state(state) {
   let statusEl = document.getElementById("statusValue");
   let blockCountEl = document.getElementById("blockCountValue");
   let phaseEl = document.getElementById("phaseValue");
+  let diffUrlEl = document.getElementById("diffUrlValue");
   let reasonEl = document.getElementById("errorReasonValue");
   let errorSectionEl = document.getElementById("errorSection");
   let errorTitleEl = document.getElementById("errorReadableTitle");
@@ -181,6 +209,7 @@ function render_state(state) {
   let settingsStateEl = document.getElementById("settingsStateValue");
   let minLinesInputEl = document.getElementById("minLinesInput");
   let expandLargeDiffsToggleEl = document.getElementById("expandLargeDiffsToggle");
+  let enableDetectionToggleEl = document.getElementById("enableDetectionToggle");
   let runNowButtonEl = document.getElementById("runNowButton");
   let retryButtonEl = document.getElementById("retryButton");
   let openPageButtonEl = document.getElementById("openPageButton");
@@ -188,6 +217,7 @@ function render_state(state) {
   statusEl.textContent = format_status(state.status);
   blockCountEl.textContent = Number.isFinite(state.blockCount) ? String(state.blockCount) : "-";
   phaseEl.textContent = format_phase(state.phase, state.subPhase);
+  render_diff_url(diffUrlEl, state.diffUrl);
   reasonEl.textContent = state.reasonCode || "-";
   updatedAtEl.textContent = format_updated_at(state.updatedAt);
   settingsStateEl.textContent = settingsState;
@@ -199,7 +229,8 @@ function render_state(state) {
   statusPillEl.textContent = format_status(state.status);
   statusPillEl.className = `statusPill ${get_status_pill_class(state.status)}`;
 
-  runNowButtonEl.disabled = state.status === "running";
+  let detection_enabled = is_detection_enabled_state(state);
+  runNowButtonEl.disabled = state.status === "running" || !detection_enabled;
   retryButtonEl.disabled = state.status === "running";
   openPageButtonEl.disabled = !Number.isFinite(activeTabId);
 
@@ -207,6 +238,12 @@ function render_state(state) {
     minLinesInputEl.value = Number.isFinite(state.minLinesCount) ? String(state.minLinesCount) : "2";
     expandLargeDiffsToggleEl.checked =
       typeof state.expandAllLargeDiffs === "boolean" ? state.expandAllLargeDiffs : DEFAULT_EXPAND_ALL_LARGE_DIFFS;
+  }
+  if (!isUpdatingDetectionEnabled && enableDetectionToggleEl) {
+    enableDetectionToggleEl.checked = detection_enabled;
+  }
+  if (enableDetectionToggleEl) {
+    enableDetectionToggleEl.disabled = isUpdatingDetectionEnabled;
   }
 
   if (popupLocalError) {
@@ -247,6 +284,7 @@ async function refresh_popup_state() {
       updatedAt: new Date().toISOString(),
       minLinesCount: 2,
       expandAllLargeDiffs: DEFAULT_EXPAND_ALL_LARGE_DIFFS,
+      detectionEnabled: DEFAULT_DETECTION_ENABLED,
     });
     return;
   }
@@ -259,12 +297,14 @@ async function save_settings() {
   }
   let inputEl = document.getElementById("minLinesInput");
   let expandLargeDiffsToggleEl = document.getElementById("expandLargeDiffsToggle");
+  let enableDetectionToggleEl = document.getElementById("enableDetectionToggle");
   let saveButtonEl = document.getElementById("saveSettingsButton");
   let value = Number.parseFloat(inputEl.value);
   if (Number.isNaN(value)) {
     value = 2;
   }
   let expand_all_large_diffs = expandLargeDiffsToggleEl.checked;
+  let detection_enabled = enableDetectionToggleEl ? enableDetectionToggleEl.checked : DEFAULT_DETECTION_ENABLED;
 
   isSavingSettings = true;
   settingsState = "Saving...";
@@ -279,12 +319,14 @@ async function save_settings() {
     updatedAt: new Date().toISOString(),
     minLinesCount: value,
     expandAllLargeDiffs: expand_all_large_diffs,
+    detectionEnabled: detection_enabled,
   });
 
   let response = await runtime_send_message({
     popupQuery: "set_settings",
     minLinesCount: value,
     expandAllLargeDiffs: expand_all_large_diffs,
+    detectionEnabled: detection_enabled,
     tabId: activeTabId,
   });
 
@@ -305,6 +347,49 @@ async function save_settings() {
   popupLocalError = null;
   settingsDirty = false;
   settingsState = "Saved";
+  await refresh_popup_state();
+}
+
+async function set_detection_enabled(detectionEnabled) {
+  if (isUpdatingDetectionEnabled) {
+    return;
+  }
+  isUpdatingDetectionEnabled = true;
+  popupLocalError = null;
+  settingsState = detectionEnabled ? "Enabling detection..." : "Pausing detection...";
+  render_state(
+    latestState || {
+      status: "idle",
+      blockCount: 0,
+      phase: "idle",
+      subPhase: null,
+      reasonCode: null,
+      updatedAt: new Date().toISOString(),
+      minLinesCount: 2,
+      expandAllLargeDiffs: DEFAULT_EXPAND_ALL_LARGE_DIFFS,
+      detectionEnabled: detectionEnabled,
+    }
+  );
+
+  let response = await runtime_send_message({
+    popupQuery: "set_detection_enabled",
+    detectionEnabled: detectionEnabled,
+    tabId: activeTabId,
+  });
+
+  isUpdatingDetectionEnabled = false;
+
+  if (!response || !response.ok) {
+    popupLocalError = {
+      reasonCode: "toggle_detection_failed",
+      errorMessage: response && response.error ? response.error : "Could not update detection setting.",
+    };
+    settingsState = "Toggle failed";
+    await refresh_popup_state();
+    return;
+  }
+
+  settingsState = detectionEnabled ? "Detection enabled" : "Detection paused";
   await refresh_popup_state();
 }
 
@@ -380,6 +465,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   let copyDiagButtonEl = document.getElementById("copyDiagButton");
   let minLinesInputEl = document.getElementById("minLinesInput");
   let expandLargeDiffsToggleEl = document.getElementById("expandLargeDiffsToggle");
+  let enableDetectionToggleEl = document.getElementById("enableDetectionToggle");
 
   settingsToggleEl.addEventListener("click", () => {
     settingsSectionEl.classList.toggle("hidden");
@@ -402,6 +488,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       updatedAt: new Date().toISOString(),
       minLinesCount: Number.parseFloat(minLinesInputEl.value),
       expandAllLargeDiffs: expandLargeDiffsToggleEl.checked,
+      detectionEnabled: enableDetectionToggleEl.checked,
     });
   });
   expandLargeDiffsToggleEl.addEventListener("change", () => {
@@ -417,7 +504,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       updatedAt: new Date().toISOString(),
       minLinesCount: Number.parseFloat(minLinesInputEl.value),
       expandAllLargeDiffs: expandLargeDiffsToggleEl.checked,
+      detectionEnabled: enableDetectionToggleEl.checked,
     });
+  });
+  enableDetectionToggleEl.addEventListener("change", () => {
+    set_detection_enabled(enableDetectionToggleEl.checked);
   });
 
   let activeTab = await get_active_tab();
@@ -432,6 +523,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       updatedAt: new Date().toISOString(),
       minLinesCount: 2,
       expandAllLargeDiffs: DEFAULT_EXPAND_ALL_LARGE_DIFFS,
+      detectionEnabled: DEFAULT_DETECTION_ENABLED,
     });
     return;
   }

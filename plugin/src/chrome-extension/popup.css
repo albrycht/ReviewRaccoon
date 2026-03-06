@@ -119,6 +119,15 @@
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.03);
 }
 
+.quickToggleSection {
+  margin: 0 12px 8px;
+  background: #ffffff;
+  border-radius: 10px;
+  border: 1px solid #dddddd;
+  padding: 10px 12px;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.03);
+}
+
 .summaryRow {
   display: flex;
   justify-content: space-between;
@@ -389,6 +398,16 @@
   color: #262626;
   font-weight: 600;
   word-break: break-word;
+}
+
+.technicalLink {
+  color: #0958d9;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.technicalLink:hover {
+  text-decoration: none;
 }
 
 .hidden {

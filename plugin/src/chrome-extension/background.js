@@ -5,6 +5,8 @@ const MIN_LINES_STORAGE_KEY = "detect-moved-blocks__min-lines-count";
 const DEFAULT_MIN_LINES_COUNT = 2;
 const EXPAND_ALL_LARGE_DIFFS_STORAGE_KEY = "detect-moved-blocks__expand-all-large-diffs";
 const DEFAULT_EXPAND_ALL_LARGE_DIFFS = true;
+const DETECTION_ENABLED_STORAGE_KEY = "detect-moved-blocks__enabled";
+const DEFAULT_DETECTION_ENABLED = true;
 const MAX_BADGE_COUNT = 999;
 const tabState = new Map();
 const popupPorts = new Set();
@@ -22,6 +24,8 @@ function create_default_state() {
     errorMessage: null,
     minLinesCount: DEFAULT_MIN_LINES_COUNT,
     expandAllLargeDiffs: DEFAULT_EXPAND_ALL_LARGE_DIFFS,
+    detectionEnabled: DEFAULT_DETECTION_ENABLED,
+    diffUrl: null,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -91,12 +95,17 @@ function get_diff_url(page_url) {
 function normalize_min_lines_count(value) {
   let parsed = Number.parseFloat(value);
   if (Number.isNaN(parsed)) return DEFAULT_MIN_LINES_COUNT;
-  return parsed;
+  return Math.max(0, parsed);
 }
 
 function normalize_expand_all_large_diffs(value) {
   if (typeof value === "boolean") return value;
   return DEFAULT_EXPAND_ALL_LARGE_DIFFS;
+}
+
+function normalize_detection_enabled(value) {
+  if (typeof value === "boolean") return value;
+  return DEFAULT_DETECTION_ENABLED;
 }
 
 async function get_min_lines_count_setting() {
@@ -121,29 +130,57 @@ async function set_expand_all_large_diffs_setting(value) {
   return normalized;
 }
 
+async function get_detection_enabled_setting() {
+  let result = await chrome.storage.local.get([DETECTION_ENABLED_STORAGE_KEY]);
+  return normalize_detection_enabled(result[DETECTION_ENABLED_STORAGE_KEY]);
+}
+
+async function set_detection_enabled_setting(value) {
+  let normalized = normalize_detection_enabled(value);
+  await chrome.storage.local.set({ [DETECTION_ENABLED_STORAGE_KEY]: normalized });
+  return normalized;
+}
+
 async function get_settings_snapshot() {
-  let [min_lines_count, expand_all_large_diffs] = await Promise.all([
+  let [min_lines_count, expand_all_large_diffs, detection_enabled] = await Promise.all([
     get_min_lines_count_setting(),
     get_expand_all_large_diffs_setting(),
+    get_detection_enabled_setting(),
   ]);
   return {
     minLinesCount: min_lines_count,
     expandAllLargeDiffs: expand_all_large_diffs,
+    detectionEnabled: detection_enabled,
   };
 }
 
 async function set_badge_for_tab(tabId, state) {
   if (typeof tabId !== "number") return;
   try {
+    let set_text_color = async (color) => {
+      if (typeof chrome.action.setBadgeTextColor === "function") {
+        await chrome.action.setBadgeTextColor({ tabId: tabId, color: color });
+      }
+    };
+
+    if (state.status === "disabled_by_settings") {
+      await chrome.action.setBadgeText({ tabId: tabId, text: "⏸" });
+      await chrome.action.setBadgeBackgroundColor({ tabId: tabId, color: [0, 0, 0, 0] });
+      await set_text_color("#5f6368");
+      return;
+    }
+
     if (state.status === "error") {
       await chrome.action.setBadgeText({ tabId: tabId, text: "!" });
       await chrome.action.setBadgeBackgroundColor({ tabId: tabId, color: "#d93025" });
+      await set_text_color("#ffffff");
       return;
     }
 
     if (state.status === "running") {
       await chrome.action.setBadgeText({ tabId: tabId, text: "…" });
       await chrome.action.setBadgeBackgroundColor({ tabId: tabId, color: "#1a73e8" });
+      await set_text_color("#ffffff");
       return;
     }
 
@@ -151,6 +188,7 @@ async function set_badge_for_tab(tabId, state) {
       let badge_text = String(Math.min(state.blockCount || 0, MAX_BADGE_COUNT));
       await chrome.action.setBadgeText({ tabId: tabId, text: badge_text });
       await chrome.action.setBadgeBackgroundColor({ tabId: tabId, color: "#188038" });
+      await set_text_color("#ffffff");
       return;
     }
 
@@ -175,8 +213,9 @@ async function update_tab_state(tabId, patch) {
 
 async function get_or_create_tab_state(tabId, tabUrl) {
   let settings = await get_settings_snapshot();
+  let is_supported_page = is_supported_github_diff_page(tabUrl);
   let existing = tabState.get(tabId);
-  if (existing && !is_supported_github_diff_page(tabUrl)) {
+  if (existing && !is_supported_page) {
     let downgraded = {
       ...existing,
       phase: "precheck",
@@ -187,16 +226,37 @@ async function get_or_create_tab_state(tabId, tabUrl) {
       errorMessage: null,
       minLinesCount: settings.minLinesCount,
       expandAllLargeDiffs: settings.expandAllLargeDiffs,
+      detectionEnabled: settings.detectionEnabled,
+      diffUrl: null,
     };
     tabState.set(tabId, downgraded);
     await set_badge_for_tab(tabId, downgraded);
     return downgraded;
+  }
+  if (is_supported_page && !settings.detectionEnabled) {
+    let paused_state = {
+      ...(existing || create_default_state()),
+      phase: "precheck",
+      subPhase: null,
+      status: "disabled_by_settings",
+      blockCount: 0,
+      reasonCode: null,
+      errorMessage: null,
+      minLinesCount: settings.minLinesCount,
+      expandAllLargeDiffs: settings.expandAllLargeDiffs,
+      detectionEnabled: settings.detectionEnabled,
+      diffUrl: null,
+    };
+    tabState.set(tabId, paused_state);
+    await set_badge_for_tab(tabId, paused_state);
+    return paused_state;
   }
   if (existing) {
     return {
       ...existing,
       minLinesCount: settings.minLinesCount,
       expandAllLargeDiffs: settings.expandAllLargeDiffs,
+      detectionEnabled: settings.detectionEnabled,
     };
   }
 
@@ -204,24 +264,32 @@ async function get_or_create_tab_state(tabId, tabUrl) {
     ...create_default_state(),
     minLinesCount: settings.minLinesCount,
     expandAllLargeDiffs: settings.expandAllLargeDiffs,
+    detectionEnabled: settings.detectionEnabled,
   };
-  if (!is_supported_github_diff_page(tabUrl)) {
+  if (!is_supported_page) {
     initial.phase = "precheck";
     initial.status = "not_supported_page";
+  } else if (!settings.detectionEnabled) {
+    initial.phase = "precheck";
+    initial.status = "disabled_by_settings";
   }
   tabState.set(tabId, initial);
   await set_badge_for_tab(tabId, initial);
   return initial;
 }
 
-function make_error_state(phase, subPhase, reasonCode, errorMessage) {
-  return {
+function make_error_state(phase, subPhase, reasonCode, errorMessage, diffUrl) {
+  let error_state = {
     phase: phase,
     subPhase: subPhase || null,
     status: "error",
     reasonCode: reasonCode || "unknown_error",
     errorMessage: errorMessage || "Unknown error",
   };
+  if (diffUrl !== undefined) {
+    error_state.diffUrl = diffUrl;
+  }
+  return error_state;
 }
 
 function array_buffer_to_base64(buffer) {
@@ -259,6 +327,7 @@ async function handle_diff_text_request(request, sender, sendResponse) {
   let page_url = request.pull_request_url || (sender && sender.tab ? sender.tab.url : "");
   let settings = await get_settings_snapshot();
   let min_lines_count = settings.minLinesCount;
+  let detection_enabled = settings.detectionEnabled;
 
   if (typeof tab_id !== "number") {
     sendResponse({
@@ -276,6 +345,8 @@ async function handle_diff_text_request(request, sender, sendResponse) {
     errorMessage: null,
     minLinesCount: min_lines_count,
     expandAllLargeDiffs: settings.expandAllLargeDiffs,
+    detectionEnabled: detection_enabled,
+    diffUrl: null,
   });
 
   if (!is_supported_github_diff_page(page_url)) {
@@ -285,6 +356,7 @@ async function handle_diff_text_request(request, sender, sendResponse) {
       reasonCode: null,
       errorMessage: null,
       blockCount: 0,
+      diffUrl: null,
     });
     sendResponse({
       ok: false,
@@ -305,6 +377,7 @@ async function handle_diff_text_request(request, sender, sendResponse) {
       reasonCode: null,
       errorMessage: null,
       blockCount: 0,
+      diffUrl: null,
     });
     sendResponse({
       ok: false,
@@ -318,9 +391,33 @@ async function handle_diff_text_request(request, sender, sendResponse) {
     return;
   }
 
+  if (!detection_enabled) {
+    let state = await update_tab_state(tab_id, {
+      phase: "precheck",
+      status: "disabled_by_settings",
+      reasonCode: null,
+      errorMessage: null,
+      blockCount: 0,
+      diffUrl: null,
+    });
+    sendResponse({
+      ok: false,
+      error: {
+        phase: state.phase,
+        subPhase: state.subPhase,
+        reasonCode: "detection_paused",
+        errorMessage: "Detection is paused in popup settings.",
+      },
+    });
+    return;
+  }
+
   let diff_url = get_diff_url(page_url);
   if (!diff_url) {
-    let state = await update_tab_state(tab_id, make_error_state("precheck", null, "invalid_page_url", "Could not parse GitHub URL."));
+    let state = await update_tab_state(
+      tab_id,
+      make_error_state("precheck", null, "invalid_page_url", "Could not parse GitHub URL.", null)
+    );
     sendResponse({ ok: false, error: state });
     return;
   }
@@ -333,6 +430,7 @@ async function handle_diff_text_request(request, sender, sendResponse) {
       status: "running",
       reasonCode: null,
       errorMessage: null,
+      diffUrl: diff_url,
     });
 
     let diff_response = await fetch(diff_url, {
@@ -347,7 +445,8 @@ async function handle_diff_text_request(request, sender, sendResponse) {
           "diff_download",
           null,
           "diff_http_error",
-          `GitHub diff request failed with status ${diff_response.status}.`
+          `GitHub diff request failed with status ${diff_response.status}.`,
+          diff_url
         )
       );
       sendResponse({ ok: false, error: state });
@@ -357,7 +456,7 @@ async function handle_diff_text_request(request, sender, sendResponse) {
   } catch (error) {
     let state = await update_tab_state(
       tab_id,
-      make_error_state("diff_download", null, "diff_download_failed", to_error_message(error))
+      make_error_state("diff_download", null, "diff_download_failed", to_error_message(error), diff_url)
     );
     sendResponse({ ok: false, error: state });
     return;
@@ -388,7 +487,7 @@ async function handle_diff_text_request(request, sender, sendResponse) {
   } catch (error) {
     let state = await update_tab_state(
       tab_id,
-      make_error_state("server_request", "server_connect", "server_connect_failed", to_error_message(error))
+      make_error_state("server_request", "server_connect", "server_connect_failed", to_error_message(error), diff_url)
     );
     sendResponse({ ok: false, error: state });
     return;
@@ -407,7 +506,8 @@ async function handle_diff_text_request(request, sender, sendResponse) {
         "server_response",
         "server_http_error",
         `server_http_${server_response.status}`,
-        response_body || `ReviewRaccoon server returned ${server_response.status}.`
+        response_body || `ReviewRaccoon server returned ${server_response.status}.`,
+        diff_url
       )
     );
     sendResponse({ ok: false, error: state });
@@ -430,7 +530,13 @@ async function handle_diff_text_request(request, sender, sendResponse) {
   } catch (error) {
     let state = await update_tab_state(
       tab_id,
-      make_error_state("server_response", "server_invalid_payload", "server_invalid_payload", to_error_message(error))
+      make_error_state(
+        "server_response",
+        "server_invalid_payload",
+        "server_invalid_payload",
+        to_error_message(error),
+        diff_url
+      )
     );
     sendResponse({ ok: false, error: state });
     return;
@@ -443,6 +549,7 @@ async function handle_diff_text_request(request, sender, sendResponse) {
     reasonCode: null,
     errorMessage: null,
     blockCount: detected_blocks.length,
+    diffUrl: diff_url,
   });
   sendResponse({
     ok: true,
@@ -480,17 +587,21 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       errorMessage: null,
       minLinesCount: settings.minLinesCount,
       expandAllLargeDiffs: settings.expandAllLargeDiffs,
+      detectionEnabled: settings.detectionEnabled,
+      diffUrl: null,
     });
   } else {
     await update_tab_state(tabId, {
-      phase: "idle",
+      phase: settings.detectionEnabled ? "idle" : "precheck",
       subPhase: null,
-      status: "idle",
+      status: settings.detectionEnabled ? "idle" : "disabled_by_settings",
       blockCount: 0,
       reasonCode: null,
       errorMessage: null,
       minLinesCount: settings.minLinesCount,
       expandAllLargeDiffs: settings.expandAllLargeDiffs,
+      detectionEnabled: settings.detectionEnabled,
+      diffUrl: null,
     });
   }
 });
@@ -606,19 +717,75 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return;
     }
 
+    if (request.popupQuery === "set_detection_enabled") {
+      let detection_enabled = await set_detection_enabled_setting(request.detectionEnabled);
+      if (typeof request.tabId === "number" && tabState.has(request.tabId)) {
+        let is_supported_page = false;
+        try {
+          let tab = await chrome.tabs.get(request.tabId);
+          is_supported_page = is_supported_github_diff_page(tab && tab.url ? tab.url : "");
+        } catch (_ignored_error) {
+          is_supported_page = false;
+        }
+        await update_tab_state(request.tabId, {
+          phase: is_supported_page ? (detection_enabled ? "idle" : "precheck") : "precheck",
+          subPhase: null,
+          status: !is_supported_page ? "not_supported_page" : detection_enabled ? "idle" : "disabled_by_settings",
+          blockCount: 0,
+          reasonCode: null,
+          errorMessage: null,
+          diffUrl: null,
+          detectionEnabled: detection_enabled,
+        });
+      }
+      sendResponse({ ok: true, detectionEnabled: detection_enabled });
+      return;
+    }
+
     if (request.popupQuery === "set_settings") {
       let min_lines_count = await set_min_lines_count_setting(request.minLinesCount);
       let expand_all_large_diffs = await set_expand_all_large_diffs_setting(request.expandAllLargeDiffs);
+      let detection_enabled =
+        typeof request.detectionEnabled === "boolean"
+          ? await set_detection_enabled_setting(request.detectionEnabled)
+          : await get_detection_enabled_setting();
       if (typeof request.tabId === "number" && tabState.has(request.tabId)) {
-        await update_tab_state(request.tabId, {
+        let current_state = tabState.get(request.tabId) || create_default_state();
+        let patch = {
           minLinesCount: min_lines_count,
           expandAllLargeDiffs: expand_all_large_diffs,
-        });
+          detectionEnabled: detection_enabled,
+        };
+        if (!detection_enabled) {
+          patch = {
+            ...patch,
+            phase: "precheck",
+            subPhase: null,
+            status: "disabled_by_settings",
+            blockCount: 0,
+            reasonCode: null,
+            errorMessage: null,
+            diffUrl: null,
+          };
+        } else if (current_state.status === "disabled_by_settings") {
+          patch = {
+            ...patch,
+            phase: "idle",
+            subPhase: null,
+            status: "idle",
+            blockCount: 0,
+            reasonCode: null,
+            errorMessage: null,
+            diffUrl: null,
+          };
+        }
+        await update_tab_state(request.tabId, patch);
       }
       sendResponse({
         ok: true,
         minLinesCount: min_lines_count,
         expandAllLargeDiffs: expand_all_large_diffs,
+        detectionEnabled: detection_enabled,
       });
       return;
     }

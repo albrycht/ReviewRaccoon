@@ -22,6 +22,19 @@
         <div id="statusHint" class="statusHint">Run detection now, or open a GitHub PR files page first.</div>
       </section>
 
+      <section class="quickToggleSection">
+        <div class="settingsToggleRow">
+          <div class="settingsToggleText">
+            <label for="enableDetectionToggle" class="settingsLabel settingsLabelInline">Enable detection</label>
+            <p class="settingsHint settingsHintInline">Pause detection without changing other settings.</p>
+          </div>
+          <label class="switch" for="enableDetectionToggle">
+            <input id="enableDetectionToggle" type="checkbox" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </section>
+
       <section class="summarySection" id="summarySection">
         <div class="summaryRow">
           <span class="summaryLabel">Found blocks</span>
@@ -36,7 +49,7 @@
       <section id="settingsSection" class="settingsSection hidden">
         <label for="minLinesInput" class="settingsLabel">Min lines in block</label>
         <input id="minLinesInput" class="settingsInput" type="number" step="1">
-        <p class="settingsHint">Set to -1 to turn detection off.</p>
+        <p class="settingsHint">Use Enable detection toggle above to pause detection.</p>
         <div class="settingsToggleRow">
           <div class="settingsToggleText">
             <label for="expandLargeDiffsToggle" class="settingsLabel settingsLabelInline">Expand all large diffs</label>
@@ -75,10 +88,12 @@
           <div id="statusValue" class="technicalValue">-</div>
           <div class="technicalLabel">Phase</div>
           <div id="phaseValue" class="technicalValue">-</div>
+          <div class="technicalLabel">Diff URL</div>
+          <div id="diffUrlValue" class="technicalValue">-</div>
           <div class="technicalLabel">Reason code</div>
           <div id="errorReasonValue" class="technicalValue">-</div>
         </div>
-      </section>
+      </details>
     </main>
   </body>
 </html>

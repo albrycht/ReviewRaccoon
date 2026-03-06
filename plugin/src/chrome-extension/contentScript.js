@@ -6,6 +6,8 @@ globalThis.__reviewRaccoonContentScriptLoaded = true;
 
 const REMOVED = "removed";
 const ADDED = "added";
+const DETECTION_ENABLED_STORAGE_KEY = "detect-moved-blocks__enabled";
+const DEFAULT_DETECTION_ENABLED = true;
 const EXPAND_ALL_LARGE_DIFFS_STORAGE_KEY = "detect-moved-blocks__expand-all-large-diffs";
 const DEFAULT_EXPAND_ALL_LARGE_DIFFS = true;
 const ALL_COLORS = ['#058DC7', '#50B432', '#ED561B', '#DDDF00', '#24CBE5', '#64E572', '#FF9655', '#FFF263', '#6AF9C4',
@@ -25,7 +27,16 @@ let timer = null;
 let url_watch_timer = null;
 let detection_started = false;
 let auto_detection_done = false;
-let last_seen_url = window.location.href;
+function get_navigation_identity_url(raw_url) {
+    // Treat hash-only navigation (e.g. #diff-...) as the same diff page.
+    try {
+        let parsed = new URL(raw_url, window.location.origin);
+        return `${parsed.origin}${parsed.pathname}${parsed.search}`;
+    } catch (_error) {
+        return String(raw_url || "").split("#")[0];
+    }
+}
+let last_seen_url = get_navigation_identity_url(window.location.href);
 let last_known_page_supported = null;
 
 const DETECT_MOVES_INTERVAL_MS = 3000;
@@ -203,6 +214,36 @@ function get_line_node(line, is_removed) {
     return node
 }
 
+function clear_previous_detection_markers() {
+    let markers = document.querySelectorAll(".detectedMovedBlock");
+    for (const marker of markers) {
+        marker.remove();
+    }
+
+    let content_nodes = document.querySelectorAll("[data-rr-original-html]");
+    for (const content_node of content_nodes) {
+        let original_html = content_node.getAttribute("data-rr-original-html");
+        if (original_html !== null) {
+            content_node.innerHTML = original_html;
+        }
+        content_node.removeAttribute("data-rr-original-html");
+    }
+
+    let bordered_nodes = document.querySelectorAll("[data-rr-original-border-top], [data-rr-original-border-bottom]");
+    for (const bordered_node of bordered_nodes) {
+        let original_top = bordered_node.getAttribute("data-rr-original-border-top");
+        let original_bottom = bordered_node.getAttribute("data-rr-original-border-bottom");
+        if (original_top !== null) {
+            bordered_node.style.borderTop = original_top;
+            bordered_node.removeAttribute("data-rr-original-border-top");
+        }
+        if (original_bottom !== null) {
+            bordered_node.style.borderBottom = original_bottom;
+            bordered_node.removeAttribute("data-rr-original-border-bottom");
+        }
+    }
+}
+
 function markLine(line, line_in_block_index, detected_block_index, is_removed, is_first_line, is_last_line, replace_html_content, alt_msg) {
     let line_node = get_line_node(line, is_removed);
     if (!line_node) {
@@ -226,6 +267,9 @@ function markLine(line, line_in_block_index, detected_block_index, is_removed, i
     if (!line_content_elem) {
         return false;
     }
+    if (!line_content_elem.hasAttribute("data-rr-original-html")) {
+        line_content_elem.setAttribute("data-rr-original-html", line_content_elem.innerHTML);
+    }
     line_content_elem.innerHTML = replace_html_content;
 
     const block_marker = document.createElement('a');
@@ -238,9 +282,15 @@ function markLine(line, line_in_block_index, detected_block_index, is_removed, i
     line_node.prepend(block_marker);
 
     if (is_first_line) {
+        if (!line_node.hasAttribute("data-rr-original-border-top")) {
+            line_node.setAttribute("data-rr-original-border-top", line_node.style.borderTop || "");
+        }
         line_node.style.borderTop = `solid 1px ${block_color}`;
     }
     if (is_last_line) {
+        if (!line_node.hasAttribute("data-rr-original-border-bottom")) {
+            line_node.setAttribute("data-rr-original-border-bottom", line_node.style.borderBottom || "");
+        }
         line_node.style.borderBottom = `solid 1px ${block_color}`;
     }
     return true;
@@ -337,8 +387,23 @@ function get_min_lines_count_or_default() {
             let min_lines_count = parseFloat(result['detect-moved-blocks__min-lines-count']);
             if (Number.isNaN(min_lines_count)) {
                 min_lines_count = 2;
+            } else if (min_lines_count < 0) {
+                min_lines_count = 0;
             }
             resolve(min_lines_count);
+        });
+    });
+}
+
+function get_detection_enabled_or_default() {
+    return new Promise((resolve) => {
+        chrome.storage.local.get([DETECTION_ENABLED_STORAGE_KEY], (result) => {
+            let detection_enabled = result[DETECTION_ENABLED_STORAGE_KEY];
+            if (typeof detection_enabled === "boolean") {
+                resolve(detection_enabled);
+                return;
+            }
+            resolve(DEFAULT_DETECTION_ENABLED);
         });
     });
 }
@@ -388,6 +453,10 @@ function set_detect_button_state(state, payload = {}) {
         if (state === "running") {
             refs.badge.innerText = "…";
             refs.badge.classList.add("rr-detect-badge-running");
+            refs.badge.style.display = "inline-flex";
+        } else if (state === "paused") {
+            refs.badge.innerText = "⏸";
+            refs.badge.classList.add("rr-detect-badge-paused");
             refs.badge.style.display = "inline-flex";
         } else if (state === "error") {
             refs.badge.innerText = "!";
@@ -678,6 +747,7 @@ async function add_detect_moved_blocks_button() {
     }
 
     function reset_detection_context_for_navigation() {
+        clear_previous_detection_markers();
         filepath_to_anchor = {};
         filepath_to_container_new = {};
         detection_started = false;
@@ -702,14 +772,6 @@ async function add_detect_moved_blocks_button() {
             });
             return;
         }
-        update_background_state({
-            phase: "idle",
-            subPhase: null,
-            status: "idle",
-            reasonCode: null,
-            errorMessage: null,
-            blockCount: 0,
-        });
     }
 
     function emit_navigation_event() {
@@ -717,7 +779,7 @@ async function add_detect_moved_blocks_button() {
     }
 
     function handle_possible_url_change() {
-        let current_url = window.location.href;
+        let current_url = get_navigation_identity_url(window.location.href);
         if (current_url === last_seen_url) {
             return;
         }
@@ -782,6 +844,19 @@ async function add_detect_moved_blocks_button() {
         if (!added) {
             return;
         }
+        let detection_enabled = await get_detection_enabled_or_default();
+        if (!detection_enabled) {
+            clear_previous_detection_markers();
+            update_background_state({
+                phase: "precheck",
+                status: "disabled_by_settings",
+                reasonCode: null,
+                errorMessage: null,
+                blockCount: 0,
+            });
+            set_detect_button_state("paused");
+            return;
+        }
         detection_started = true;
         try {
             set_detect_button_state("running");
@@ -793,13 +868,32 @@ async function add_detect_moved_blocks_button() {
                 let user_name = get_user_name();
                 let response = await request_detected_blocks(page_url, user_name, min_lines_count);
                 if (!response || !response.ok) {
-                    set_detect_button_state("error");
+                    let reason_code = response && response.error ? response.error.reasonCode : null;
+                    if (reason_code === "disabled_by_settings" || reason_code === "detection_paused") {
+                        set_detect_button_state("paused");
+                    } else {
+                        set_detect_button_state("error");
+                    }
+                    return;
+                }
+                let detection_still_enabled = await get_detection_enabled_or_default();
+                if (!detection_still_enabled) {
+                    clear_previous_detection_markers();
+                    update_background_state({
+                        phase: "precheck",
+                        status: "disabled_by_settings",
+                        reasonCode: null,
+                        errorMessage: null,
+                        blockCount: 0,
+                    });
+                    set_detect_button_state("paused");
                     return;
                 }
                 try {
                     let detected_blocks = response.detectedBlocks || [];
                     let expand_all_large_diffs = await get_expand_all_large_diffs_or_default();
                     await expand_large_diffs(detected_blocks, expand_all_large_diffs);
+                    clear_previous_detection_markers();
                     let marked_lines_count = highlights_changes(detected_blocks);
                     if (detected_blocks.length > 0 && marked_lines_count === 0) {
                         update_background_state({
@@ -841,7 +935,7 @@ async function add_detect_moved_blocks_button() {
                     errorMessage: null,
                     blockCount: 0,
                 });
-                set_detect_button_state("idle");
+                set_detect_button_state("paused");
             }
         } finally {
             detection_started = false;
@@ -855,6 +949,20 @@ async function add_detect_moved_blocks_button() {
         }
         let added = await add_detect_moved_blocks_button();
         if (!added) {
+            return;
+        }
+        let detection_enabled = await get_detection_enabled_or_default();
+        if (!detection_enabled) {
+            auto_detection_done = false;
+            clear_previous_detection_markers();
+            update_background_state({
+                phase: "precheck",
+                status: "disabled_by_settings",
+                reasonCode: null,
+                errorMessage: null,
+                blockCount: 0,
+            });
+            set_detect_button_state("paused");
             return;
         }
         if (!auto_detection_done) {

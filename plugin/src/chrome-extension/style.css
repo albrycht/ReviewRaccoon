@@ -68,6 +68,17 @@
     background: #1a73e8;
 }
 
+.rr-detect-badge-paused {
+    background: transparent;
+    border: 0;
+    color: #5f6368;
+    min-width: 0;
+    width: auto;
+    height: auto;
+    padding: 0;
+    line-height: 1;
+}
+
 .rr-detect-badge-success {
     background: #188038;
 }
