@@ -1,12 +1,16 @@
 "use strict";
 
-const REVIEWRACCOON_API_URL = "https://reviewraccoon.com/moved-blocks";
+const DEFAULT_SERVER_BASE_URL = "https://reviewraccoon.com";
 const MIN_LINES_STORAGE_KEY = "detect-moved-blocks__min-lines-count";
 const DEFAULT_MIN_LINES_COUNT = 2;
 const EXPAND_ALL_LARGE_DIFFS_STORAGE_KEY = "detect-moved-blocks__expand-all-large-diffs";
 const DEFAULT_EXPAND_ALL_LARGE_DIFFS = true;
 const DETECTION_ENABLED_STORAGE_KEY = "detect-moved-blocks__enabled";
 const DEFAULT_DETECTION_ENABLED = true;
+const CUSTOM_SERVER_ENABLED_STORAGE_KEY = "detect-moved-blocks__custom-server-enabled";
+const DEFAULT_CUSTOM_SERVER_ENABLED = false;
+const CUSTOM_SERVER_BASE_URL_STORAGE_KEY = "detect-moved-blocks__custom-server-base-url";
+const DEFAULT_CUSTOM_SERVER_BASE_URL = DEFAULT_SERVER_BASE_URL;
 const MAX_BADGE_COUNT = 999;
 const tabState = new Map();
 const popupPorts = new Set();
@@ -25,6 +29,8 @@ function create_default_state() {
     minLinesCount: DEFAULT_MIN_LINES_COUNT,
     expandAllLargeDiffs: DEFAULT_EXPAND_ALL_LARGE_DIFFS,
     detectionEnabled: DEFAULT_DETECTION_ENABLED,
+    customServerEnabled: DEFAULT_CUSTOM_SERVER_ENABLED,
+    customServerBaseUrl: DEFAULT_CUSTOM_SERVER_BASE_URL,
     diffUrl: null,
     updatedAt: new Date().toISOString(),
   };
@@ -108,6 +114,28 @@ function normalize_detection_enabled(value) {
   return DEFAULT_DETECTION_ENABLED;
 }
 
+function normalize_custom_server_enabled(value) {
+  if (typeof value === "boolean") return value;
+  return DEFAULT_CUSTOM_SERVER_ENABLED;
+}
+
+function normalize_custom_server_base_url(value) {
+  let raw = typeof value === "string" ? value.trim() : "";
+  if (!raw) return DEFAULT_CUSTOM_SERVER_BASE_URL;
+  if (!/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(raw)) {
+    raw = `http://${raw}`;
+  }
+  try {
+    let parsed = new URL(raw);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return DEFAULT_CUSTOM_SERVER_BASE_URL;
+    }
+    return parsed.origin;
+  } catch (_ignored_error) {
+    return DEFAULT_CUSTOM_SERVER_BASE_URL;
+  }
+}
+
 async function get_min_lines_count_setting() {
   let result = await chrome.storage.local.get([MIN_LINES_STORAGE_KEY]);
   return normalize_min_lines_count(result[MIN_LINES_STORAGE_KEY]);
@@ -141,16 +169,52 @@ async function set_detection_enabled_setting(value) {
   return normalized;
 }
 
+async function get_custom_server_enabled_setting() {
+  let result = await chrome.storage.local.get([CUSTOM_SERVER_ENABLED_STORAGE_KEY]);
+  return normalize_custom_server_enabled(result[CUSTOM_SERVER_ENABLED_STORAGE_KEY]);
+}
+
+async function set_custom_server_enabled_setting(value) {
+  let normalized = normalize_custom_server_enabled(value);
+  await chrome.storage.local.set({ [CUSTOM_SERVER_ENABLED_STORAGE_KEY]: normalized });
+  return normalized;
+}
+
+async function get_custom_server_base_url_setting() {
+  let result = await chrome.storage.local.get([CUSTOM_SERVER_BASE_URL_STORAGE_KEY]);
+  return normalize_custom_server_base_url(result[CUSTOM_SERVER_BASE_URL_STORAGE_KEY]);
+}
+
+async function set_custom_server_base_url_setting(value) {
+  let normalized = normalize_custom_server_base_url(value);
+  await chrome.storage.local.set({ [CUSTOM_SERVER_BASE_URL_STORAGE_KEY]: normalized });
+  return normalized;
+}
+
+function resolve_moved_blocks_api_url(settings) {
+  let use_custom_server = normalize_custom_server_enabled(settings && settings.customServerEnabled);
+  if (!use_custom_server) {
+    return `${DEFAULT_SERVER_BASE_URL}/moved-blocks`;
+  }
+  let base_url = normalize_custom_server_base_url(settings && settings.customServerBaseUrl);
+  return `${base_url}/moved-blocks`;
+}
+
 async function get_settings_snapshot() {
-  let [min_lines_count, expand_all_large_diffs, detection_enabled] = await Promise.all([
-    get_min_lines_count_setting(),
-    get_expand_all_large_diffs_setting(),
-    get_detection_enabled_setting(),
-  ]);
+  let [min_lines_count, expand_all_large_diffs, detection_enabled, custom_server_enabled, custom_server_base_url] =
+    await Promise.all([
+      get_min_lines_count_setting(),
+      get_expand_all_large_diffs_setting(),
+      get_detection_enabled_setting(),
+      get_custom_server_enabled_setting(),
+      get_custom_server_base_url_setting(),
+    ]);
   return {
     minLinesCount: min_lines_count,
     expandAllLargeDiffs: expand_all_large_diffs,
     detectionEnabled: detection_enabled,
+    customServerEnabled: custom_server_enabled,
+    customServerBaseUrl: custom_server_base_url,
   };
 }
 
@@ -227,6 +291,8 @@ async function get_or_create_tab_state(tabId, tabUrl) {
       minLinesCount: settings.minLinesCount,
       expandAllLargeDiffs: settings.expandAllLargeDiffs,
       detectionEnabled: settings.detectionEnabled,
+      customServerEnabled: settings.customServerEnabled,
+      customServerBaseUrl: settings.customServerBaseUrl,
       diffUrl: null,
     };
     tabState.set(tabId, downgraded);
@@ -245,6 +311,8 @@ async function get_or_create_tab_state(tabId, tabUrl) {
       minLinesCount: settings.minLinesCount,
       expandAllLargeDiffs: settings.expandAllLargeDiffs,
       detectionEnabled: settings.detectionEnabled,
+      customServerEnabled: settings.customServerEnabled,
+      customServerBaseUrl: settings.customServerBaseUrl,
       diffUrl: null,
     };
     tabState.set(tabId, paused_state);
@@ -257,6 +325,8 @@ async function get_or_create_tab_state(tabId, tabUrl) {
       minLinesCount: settings.minLinesCount,
       expandAllLargeDiffs: settings.expandAllLargeDiffs,
       detectionEnabled: settings.detectionEnabled,
+      customServerEnabled: settings.customServerEnabled,
+      customServerBaseUrl: settings.customServerBaseUrl,
     };
   }
 
@@ -265,6 +335,8 @@ async function get_or_create_tab_state(tabId, tabUrl) {
     minLinesCount: settings.minLinesCount,
     expandAllLargeDiffs: settings.expandAllLargeDiffs,
     detectionEnabled: settings.detectionEnabled,
+    customServerEnabled: settings.customServerEnabled,
+    customServerBaseUrl: settings.customServerBaseUrl,
   };
   if (!is_supported_page) {
     initial.phase = "precheck";
@@ -328,6 +400,7 @@ async function handle_diff_text_request(request, sender, sendResponse) {
   let settings = await get_settings_snapshot();
   let min_lines_count = settings.minLinesCount;
   let detection_enabled = settings.detectionEnabled;
+  let server_api_url = resolve_moved_blocks_api_url(settings);
 
   if (typeof tab_id !== "number") {
     sendResponse({
@@ -346,6 +419,8 @@ async function handle_diff_text_request(request, sender, sendResponse) {
     minLinesCount: min_lines_count,
     expandAllLargeDiffs: settings.expandAllLargeDiffs,
     detectionEnabled: detection_enabled,
+    customServerEnabled: settings.customServerEnabled,
+    customServerBaseUrl: settings.customServerBaseUrl,
     diffUrl: null,
   });
 
@@ -472,7 +547,7 @@ async function handle_diff_text_request(request, sender, sendResponse) {
       errorMessage: null,
     });
 
-    server_response = await fetch(REVIEWRACCOON_API_URL, {
+    server_response = await fetch(server_api_url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -588,6 +663,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       minLinesCount: settings.minLinesCount,
       expandAllLargeDiffs: settings.expandAllLargeDiffs,
       detectionEnabled: settings.detectionEnabled,
+      customServerEnabled: settings.customServerEnabled,
+      customServerBaseUrl: settings.customServerBaseUrl,
       diffUrl: null,
     });
   } else {
@@ -601,6 +678,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       minLinesCount: settings.minLinesCount,
       expandAllLargeDiffs: settings.expandAllLargeDiffs,
       detectionEnabled: settings.detectionEnabled,
+      customServerEnabled: settings.customServerEnabled,
+      customServerBaseUrl: settings.customServerBaseUrl,
       diffUrl: null,
     });
   }
@@ -719,6 +798,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.popupQuery === "set_detection_enabled") {
       let detection_enabled = await set_detection_enabled_setting(request.detectionEnabled);
+      let [custom_server_enabled, custom_server_base_url] = await Promise.all([
+        get_custom_server_enabled_setting(),
+        get_custom_server_base_url_setting(),
+      ]);
       if (typeof request.tabId === "number" && tabState.has(request.tabId)) {
         let is_supported_page = false;
         try {
@@ -736,9 +819,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           errorMessage: null,
           diffUrl: null,
           detectionEnabled: detection_enabled,
+          customServerEnabled: custom_server_enabled,
+          customServerBaseUrl: custom_server_base_url,
         });
       }
-      sendResponse({ ok: true, detectionEnabled: detection_enabled });
+      sendResponse({
+        ok: true,
+        detectionEnabled: detection_enabled,
+        customServerEnabled: custom_server_enabled,
+        customServerBaseUrl: custom_server_base_url,
+      });
       return;
     }
 
@@ -749,12 +839,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         typeof request.detectionEnabled === "boolean"
           ? await set_detection_enabled_setting(request.detectionEnabled)
           : await get_detection_enabled_setting();
+      let custom_server_enabled =
+        typeof request.customServerEnabled === "boolean"
+          ? await set_custom_server_enabled_setting(request.customServerEnabled)
+          : await get_custom_server_enabled_setting();
+      let custom_server_base_url =
+        typeof request.customServerBaseUrl === "string"
+          ? await set_custom_server_base_url_setting(request.customServerBaseUrl)
+          : await get_custom_server_base_url_setting();
       if (typeof request.tabId === "number" && tabState.has(request.tabId)) {
         let current_state = tabState.get(request.tabId) || create_default_state();
         let patch = {
           minLinesCount: min_lines_count,
           expandAllLargeDiffs: expand_all_large_diffs,
           detectionEnabled: detection_enabled,
+          customServerEnabled: custom_server_enabled,
+          customServerBaseUrl: custom_server_base_url,
         };
         if (!detection_enabled) {
           patch = {
@@ -786,6 +886,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         minLinesCount: min_lines_count,
         expandAllLargeDiffs: expand_all_large_diffs,
         detectionEnabled: detection_enabled,
+        customServerEnabled: custom_server_enabled,
+        customServerBaseUrl: custom_server_base_url,
       });
       return;
     }

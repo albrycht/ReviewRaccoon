@@ -210,6 +210,10 @@
   margin: 0;
 }
 
+.settingsInputRow {
+  margin: 0 0 10px;
+}
+
 .switch {
   position: relative;
   display: inline-block;

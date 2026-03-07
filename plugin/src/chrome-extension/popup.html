@@ -77,6 +77,27 @@
                 <span class="slider"></span>
               </label>
             </div>
+            <div class="settingsToggleRow">
+              <div class="settingsToggleText">
+                <label for="customServerToggle" class="settingsLabel settingsLabelInline">Custom server</label>
+                <p class="settingsHint settingsHintInline">Use a custom backend base URL.</p>
+              </div>
+              <label class="switch" for="customServerToggle">
+                <input id="customServerToggle" type="checkbox">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div id="customServerInputRow" class="settingsInputRow hidden">
+              <label for="customServerUrlInput" class="settingsLabel">Server URL</label>
+              <input
+                id="customServerUrlInput"
+                class="settingsInput"
+                type="text"
+                value="https://reviewraccoon.com"
+                spellcheck="false"
+                autocomplete="off"
+              >
+            </div>
             <div class="settingsStateRow">
               <span class="settingsStateLabel">Settings state</span>
               <span id="settingsStateValue" class="settingsStateValue">Up to date</span>

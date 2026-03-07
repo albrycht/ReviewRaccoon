@@ -88,9 +88,12 @@ There is no root build script (`package.json`) or standard CI config in repo roo
   - `detect-moved-blocks__enabled` (default `true`, exposed as compact header toggle in popup)
   - `detect-moved-blocks__min-lines-count`
   - `detect-moved-blocks__expand-all-large-diffs` (default `true`, exposed as slider toggle in popup settings)
+  - `detect-moved-blocks__custom-server-enabled` (default `false`, exposed as "Custom server" toggle in popup settings)
+  - `detect-moved-blocks__custom-server-base-url` (default `https://reviewraccoon.com`, shown when custom server toggle is enabled)
 - Popup "Technical details" includes the exact `.diff` URL used for the latest detection attempt (`diffUrl` in tab state), shown as a clickable link for debugging.
 - Popup "Settings" now lives in its own collapsed `details` block directly below "Technical details"; the old cog-triggered settings panel was removed.
 - When detection is disabled from the header toggle, popup body content is replaced by a sleeping raccoon image (`images/sleeping_raccoon_512.png`) while header title/toggle remain visible.
+- Custom server URL normalization in `background.js` accepts formats like `localhost`, `http://localhost`, `localhost:8000`, trims trailing slashes, prepends `http://` when missing, and always sends detection requests to `<normalized-base>/moved-blocks`.
 - GitHub page control is now an icon-only ReviewRaccoon control in the right toolbar (`.pr-review-tools`), inserted as first item and styled as icon + badge.
 - In-page badge semantics mirror extension badge semantics:
   - paused/disabled: `⏸` (gray)
@@ -107,6 +110,7 @@ There is no root build script (`package.json`) or standard CI config in repo roo
   - `/pull/<number>/commits/<sha>`
   - `/commit/<sha>` and `/commits/<sha>`
 - Content-script navigation handling is SPA-aware: it watches History API (`pushState`/`replaceState`), `popstate`, `hashchange`, GitHub Turbo/PJAX events, and a short URL polling fallback. URL identity ignores hash fragments (`#diff-...`), so in-page diff anchor jumps do not reset detection state or trigger re-detection.
+- Content script now defensively handles Chrome `"Extension context invalidated"` runtime/storage errors (e.g. right after extension reload) by falling back to defaults and stopping polling timers instead of throwing uncaught promise errors.
 - Large diff expansion is now detection-aware in `contentScript.js`:
   - detection fetch runs before expansion, then expansion can target only files that contain detected moved blocks.
   - default behavior still expands all large diffs (`detect-moved-blocks__expand-all-large-diffs` defaults to `true` in local storage).

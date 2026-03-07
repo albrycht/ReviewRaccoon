@@ -3,6 +3,8 @@
 const REFRESH_INTERVAL_MS = 1500;
 const DEFAULT_EXPAND_ALL_LARGE_DIFFS = true;
 const DEFAULT_DETECTION_ENABLED = true;
+const DEFAULT_CUSTOM_SERVER_ENABLED = false;
+const DEFAULT_CUSTOM_SERVER_BASE_URL = "https://reviewraccoon.com";
 
 let activeTabId = null;
 let activeTabUrl = "";
@@ -65,6 +67,20 @@ function is_detection_enabled_state(state) {
     return DEFAULT_DETECTION_ENABLED;
   }
   return state.detectionEnabled;
+}
+
+function is_custom_server_enabled_state(state) {
+  if (!state || typeof state.customServerEnabled !== "boolean") {
+    return DEFAULT_CUSTOM_SERVER_ENABLED;
+  }
+  return state.customServerEnabled;
+}
+
+function get_custom_server_base_url_state(state) {
+  if (!state || typeof state.customServerBaseUrl !== "string" || !state.customServerBaseUrl.trim()) {
+    return DEFAULT_CUSTOM_SERVER_BASE_URL;
+  }
+  return state.customServerBaseUrl;
 }
 
 function get_status_pill_class(status) {
@@ -211,6 +227,9 @@ function render_state(state) {
   let settingsStateEl = document.getElementById("settingsStateValue");
   let minLinesInputEl = document.getElementById("minLinesInput");
   let expandLargeDiffsToggleEl = document.getElementById("expandLargeDiffsToggle");
+  let customServerToggleEl = document.getElementById("customServerToggle");
+  let customServerUrlInputEl = document.getElementById("customServerUrlInput");
+  let customServerInputRowEl = document.getElementById("customServerInputRow");
   let enableDetectionToggleEl = document.getElementById("enableDetectionToggle");
   let runNowButtonEl = document.getElementById("runNowButton");
   let retryButtonEl = document.getElementById("retryButton");
@@ -245,12 +264,17 @@ function render_state(state) {
     minLinesInputEl.value = Number.isFinite(state.minLinesCount) ? String(state.minLinesCount) : "2";
     expandLargeDiffsToggleEl.checked =
       typeof state.expandAllLargeDiffs === "boolean" ? state.expandAllLargeDiffs : DEFAULT_EXPAND_ALL_LARGE_DIFFS;
+    customServerToggleEl.checked = is_custom_server_enabled_state(state);
+    customServerUrlInputEl.value = get_custom_server_base_url_state(state);
   }
   if (!isUpdatingDetectionEnabled && enableDetectionToggleEl) {
     enableDetectionToggleEl.checked = detection_enabled;
   }
   if (enableDetectionToggleEl) {
     enableDetectionToggleEl.disabled = isUpdatingDetectionEnabled;
+  }
+  if (customServerInputRowEl && customServerToggleEl) {
+    customServerInputRowEl.classList.toggle("hidden", !customServerToggleEl.checked);
   }
 
   if (popupLocalError) {
@@ -291,6 +315,8 @@ async function refresh_popup_state() {
       updatedAt: new Date().toISOString(),
       minLinesCount: 2,
       expandAllLargeDiffs: DEFAULT_EXPAND_ALL_LARGE_DIFFS,
+      customServerEnabled: DEFAULT_CUSTOM_SERVER_ENABLED,
+      customServerBaseUrl: DEFAULT_CUSTOM_SERVER_BASE_URL,
       detectionEnabled: DEFAULT_DETECTION_ENABLED,
     });
     return;
@@ -304,6 +330,8 @@ async function save_settings() {
   }
   let inputEl = document.getElementById("minLinesInput");
   let expandLargeDiffsToggleEl = document.getElementById("expandLargeDiffsToggle");
+  let customServerToggleEl = document.getElementById("customServerToggle");
+  let customServerUrlInputEl = document.getElementById("customServerUrlInput");
   let enableDetectionToggleEl = document.getElementById("enableDetectionToggle");
   let saveButtonEl = document.getElementById("saveSettingsButton");
   let value = Number.parseFloat(inputEl.value);
@@ -311,6 +339,10 @@ async function save_settings() {
     value = 2;
   }
   let expand_all_large_diffs = expandLargeDiffsToggleEl.checked;
+  let custom_server_enabled = customServerToggleEl ? customServerToggleEl.checked : DEFAULT_CUSTOM_SERVER_ENABLED;
+  let custom_server_base_url = customServerUrlInputEl
+    ? customServerUrlInputEl.value
+    : DEFAULT_CUSTOM_SERVER_BASE_URL;
   let detection_enabled = enableDetectionToggleEl ? enableDetectionToggleEl.checked : DEFAULT_DETECTION_ENABLED;
 
   isSavingSettings = true;
@@ -326,6 +358,8 @@ async function save_settings() {
     updatedAt: new Date().toISOString(),
     minLinesCount: value,
     expandAllLargeDiffs: expand_all_large_diffs,
+    customServerEnabled: custom_server_enabled,
+    customServerBaseUrl: custom_server_base_url,
     detectionEnabled: detection_enabled,
   });
 
@@ -333,6 +367,8 @@ async function save_settings() {
     popupQuery: "set_settings",
     minLinesCount: value,
     expandAllLargeDiffs: expand_all_large_diffs,
+    customServerEnabled: custom_server_enabled,
+    customServerBaseUrl: custom_server_base_url,
     detectionEnabled: detection_enabled,
     tabId: activeTabId,
   });
@@ -374,6 +410,8 @@ async function set_detection_enabled(detectionEnabled) {
       updatedAt: new Date().toISOString(),
       minLinesCount: 2,
       expandAllLargeDiffs: DEFAULT_EXPAND_ALL_LARGE_DIFFS,
+      customServerEnabled: DEFAULT_CUSTOM_SERVER_ENABLED,
+      customServerBaseUrl: DEFAULT_CUSTOM_SERVER_BASE_URL,
       detectionEnabled: detectionEnabled,
     }
   );
@@ -470,6 +508,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   let copyDiagButtonEl = document.getElementById("copyDiagButton");
   let minLinesInputEl = document.getElementById("minLinesInput");
   let expandLargeDiffsToggleEl = document.getElementById("expandLargeDiffsToggle");
+  let customServerToggleEl = document.getElementById("customServerToggle");
+  let customServerUrlInputEl = document.getElementById("customServerUrlInput");
   let enableDetectionToggleEl = document.getElementById("enableDetectionToggle");
 
   saveSettingsButtonEl.addEventListener("click", save_settings);
@@ -490,6 +530,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       updatedAt: new Date().toISOString(),
       minLinesCount: Number.parseFloat(minLinesInputEl.value),
       expandAllLargeDiffs: expandLargeDiffsToggleEl.checked,
+      customServerEnabled: customServerToggleEl.checked,
+      customServerBaseUrl: customServerUrlInputEl.value,
       detectionEnabled: enableDetectionToggleEl.checked,
     });
   });
@@ -506,6 +548,44 @@ document.addEventListener("DOMContentLoaded", async () => {
       updatedAt: new Date().toISOString(),
       minLinesCount: Number.parseFloat(minLinesInputEl.value),
       expandAllLargeDiffs: expandLargeDiffsToggleEl.checked,
+      customServerEnabled: customServerToggleEl.checked,
+      customServerBaseUrl: customServerUrlInputEl.value,
+      detectionEnabled: enableDetectionToggleEl.checked,
+    });
+  });
+  customServerToggleEl.addEventListener("change", () => {
+    settingsDirty = true;
+    settingsState = "Unsaved changes";
+    popupLocalError = null;
+    render_state(latestState || {
+      status: "idle",
+      blockCount: 0,
+      phase: "idle",
+      subPhase: null,
+      reasonCode: null,
+      updatedAt: new Date().toISOString(),
+      minLinesCount: Number.parseFloat(minLinesInputEl.value),
+      expandAllLargeDiffs: expandLargeDiffsToggleEl.checked,
+      customServerEnabled: customServerToggleEl.checked,
+      customServerBaseUrl: customServerUrlInputEl.value,
+      detectionEnabled: enableDetectionToggleEl.checked,
+    });
+  });
+  customServerUrlInputEl.addEventListener("input", () => {
+    settingsDirty = true;
+    settingsState = "Unsaved changes";
+    popupLocalError = null;
+    render_state(latestState || {
+      status: "idle",
+      blockCount: 0,
+      phase: "idle",
+      subPhase: null,
+      reasonCode: null,
+      updatedAt: new Date().toISOString(),
+      minLinesCount: Number.parseFloat(minLinesInputEl.value),
+      expandAllLargeDiffs: expandLargeDiffsToggleEl.checked,
+      customServerEnabled: customServerToggleEl.checked,
+      customServerBaseUrl: customServerUrlInputEl.value,
       detectionEnabled: enableDetectionToggleEl.checked,
     });
   });
@@ -525,6 +605,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       updatedAt: new Date().toISOString(),
       minLinesCount: 2,
       expandAllLargeDiffs: DEFAULT_EXPAND_ALL_LARGE_DIFFS,
+      customServerEnabled: DEFAULT_CUSTOM_SERVER_ENABLED,
+      customServerBaseUrl: DEFAULT_CUSTOM_SERVER_BASE_URL,
       detectionEnabled: DEFAULT_DETECTION_ENABLED,
     });
     return;

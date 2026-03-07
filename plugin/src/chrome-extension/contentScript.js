@@ -45,6 +45,26 @@ const NAVIGATION_EVENT_NAME = "reviewraccoon:navigation";
 const DIFF_SETTLE_POLL_INTERVAL_MS = 100;
 const DIFF_SETTLE_QUIET_PERIOD_MS = 600;
 const DIFF_SETTLE_TIMEOUT_MS = 20000;
+const EXTENSION_CONTEXT_INVALIDATED_FRAGMENT = "Extension context invalidated";
+
+function is_extension_context_invalidated_error(error) {
+    if (!error) {
+        return false;
+    }
+    let message = typeof error === "string" ? error : (error.message || String(error));
+    return message.includes(EXTENSION_CONTEXT_INVALIDATED_FRAGMENT);
+}
+
+function stop_detection_timers() {
+    if (timer !== null) {
+        clearInterval(timer);
+        timer = null;
+    }
+    if (url_watch_timer !== null) {
+        clearInterval(url_watch_timer);
+        url_watch_timer = null;
+    }
+}
 
 function insertAfter(newNode, referenceNode) {
     referenceNode.parentNode.insertBefore(newNode, referenceNode.nextSibling);
@@ -383,55 +403,85 @@ function remove_detect_moved_blocks_button() {
 
 function get_min_lines_count_or_default() {
     return new Promise((resolve) => {
-        chrome.storage.local.get(['detect-moved-blocks__min-lines-count'], (result) => {
-            let min_lines_count = parseFloat(result['detect-moved-blocks__min-lines-count']);
-            if (Number.isNaN(min_lines_count)) {
-                min_lines_count = 2;
-            } else if (min_lines_count < 0) {
-                min_lines_count = 0;
-            }
-            resolve(min_lines_count);
-        });
+        try {
+            chrome.storage.local.get(['detect-moved-blocks__min-lines-count'], (result) => {
+                if (chrome.runtime.lastError) {
+                    resolve(2);
+                    return;
+                }
+                let min_lines_count = parseFloat(result['detect-moved-blocks__min-lines-count']);
+                if (Number.isNaN(min_lines_count)) {
+                    min_lines_count = 2;
+                } else if (min_lines_count < 0) {
+                    min_lines_count = 0;
+                }
+                resolve(min_lines_count);
+            });
+        } catch (_error) {
+            resolve(2);
+        }
     });
 }
 
 function get_detection_enabled_or_default() {
     return new Promise((resolve) => {
-        chrome.storage.local.get([DETECTION_ENABLED_STORAGE_KEY], (result) => {
-            let detection_enabled = result[DETECTION_ENABLED_STORAGE_KEY];
-            if (typeof detection_enabled === "boolean") {
-                resolve(detection_enabled);
-                return;
-            }
+        try {
+            chrome.storage.local.get([DETECTION_ENABLED_STORAGE_KEY], (result) => {
+                if (chrome.runtime.lastError) {
+                    resolve(DEFAULT_DETECTION_ENABLED);
+                    return;
+                }
+                let detection_enabled = result[DETECTION_ENABLED_STORAGE_KEY];
+                if (typeof detection_enabled === "boolean") {
+                    resolve(detection_enabled);
+                    return;
+                }
+                resolve(DEFAULT_DETECTION_ENABLED);
+            });
+        } catch (_error) {
             resolve(DEFAULT_DETECTION_ENABLED);
-        });
+        }
     });
 }
 
 function get_expand_all_large_diffs_or_default() {
     return new Promise((resolve) => {
-        chrome.storage.local.get([EXPAND_ALL_LARGE_DIFFS_STORAGE_KEY], (result) => {
-            let expand_all_large_diffs = result[EXPAND_ALL_LARGE_DIFFS_STORAGE_KEY];
-            if (typeof expand_all_large_diffs === "boolean") {
-                resolve(expand_all_large_diffs);
-                return;
-            }
+        try {
+            chrome.storage.local.get([EXPAND_ALL_LARGE_DIFFS_STORAGE_KEY], (result) => {
+                if (chrome.runtime.lastError) {
+                    resolve(DEFAULT_EXPAND_ALL_LARGE_DIFFS);
+                    return;
+                }
+                let expand_all_large_diffs = result[EXPAND_ALL_LARGE_DIFFS_STORAGE_KEY];
+                if (typeof expand_all_large_diffs === "boolean") {
+                    resolve(expand_all_large_diffs);
+                    return;
+                }
+                resolve(DEFAULT_EXPAND_ALL_LARGE_DIFFS);
+            });
+        } catch (_error) {
             resolve(DEFAULT_EXPAND_ALL_LARGE_DIFFS);
-        });
+        }
     });
 }
 
 function update_background_state(state) {
-    chrome.runtime.sendMessage(
-        {
-            contentScriptQuery: "update_tab_state",
-            state: state,
-        },
-        () => {
-            // Ignore disconnected background errors during navigation/unload.
-            void chrome.runtime.lastError;
+    try {
+        chrome.runtime.sendMessage(
+            {
+                contentScriptQuery: "update_tab_state",
+                state: state,
+            },
+            () => {
+                // Ignore disconnected background errors during navigation/unload.
+                void chrome.runtime.lastError;
+            }
+        );
+    } catch (error) {
+        if (is_extension_context_invalidated_error(error)) {
+            stop_detection_timers();
         }
-    );
+    }
 }
 
 function get_detect_button_refs() {
@@ -474,39 +524,53 @@ function set_detect_button_state(state, payload = {}) {
 
 function open_extension_popup() {
     return new Promise((resolve) => {
-        chrome.runtime.sendMessage(
-            {
-                contentScriptQuery: "open_popup",
-            },
-            (response) => {
-                if (chrome.runtime.lastError) {
-                    resolve({ ok: false, error: chrome.runtime.lastError.message });
-                    return;
+        try {
+            chrome.runtime.sendMessage(
+                {
+                    contentScriptQuery: "open_popup",
+                },
+                (response) => {
+                    if (chrome.runtime.lastError) {
+                        resolve({ ok: false, error: chrome.runtime.lastError.message });
+                        return;
+                    }
+                    resolve(response || { ok: false, error: "No response from background." });
                 }
-                resolve(response || { ok: false, error: "No response from background." });
+            );
+        } catch (error) {
+            if (is_extension_context_invalidated_error(error)) {
+                stop_detection_timers();
             }
-        );
+            resolve({ ok: false, error: error && error.message ? error.message : String(error) });
+        }
     });
 }
 
 function request_icon_data_url() {
     return new Promise((resolve) => {
-        chrome.runtime.sendMessage(
-            {
-                contentScriptQuery: "get_icon_data_url",
-            },
-            (response) => {
-                if (chrome.runtime.lastError) {
-                    resolve(null);
-                    return;
+        try {
+            chrome.runtime.sendMessage(
+                {
+                    contentScriptQuery: "get_icon_data_url",
+                },
+                (response) => {
+                    if (chrome.runtime.lastError) {
+                        resolve(null);
+                        return;
+                    }
+                    if (!response || !response.ok || !response.dataUrl) {
+                        resolve(null);
+                        return;
+                    }
+                    resolve(response.dataUrl);
                 }
-                if (!response || !response.ok || !response.dataUrl) {
-                    resolve(null);
-                    return;
-                }
-                resolve(response.dataUrl);
+            );
+        } catch (error) {
+            if (is_extension_context_invalidated_error(error)) {
+                stop_detection_timers();
             }
-        );
+            resolve(null);
+        }
     });
 }
 
@@ -520,28 +584,42 @@ function get_user_name() {
 
 function request_detected_blocks(page_url, user_name, min_lines_count) {
     return new Promise((resolve) => {
-        chrome.runtime.sendMessage(
-            {
-                contentScriptQuery: "diff_text",
-                pull_request_url: page_url,
-                user_name: user_name,
-                min_lines_count: min_lines_count,
-            },
-            (response) => {
-                if (chrome.runtime.lastError) {
-                    resolve({
-                        ok: false,
-                        error: {
-                            phase: "precheck",
-                            reasonCode: "runtime_message_error",
-                            errorMessage: chrome.runtime.lastError.message,
-                        },
-                    });
-                    return;
+        try {
+            chrome.runtime.sendMessage(
+                {
+                    contentScriptQuery: "diff_text",
+                    pull_request_url: page_url,
+                    user_name: user_name,
+                    min_lines_count: min_lines_count,
+                },
+                (response) => {
+                    if (chrome.runtime.lastError) {
+                        resolve({
+                            ok: false,
+                            error: {
+                                phase: "precheck",
+                                reasonCode: "runtime_message_error",
+                                errorMessage: chrome.runtime.lastError.message,
+                            },
+                        });
+                        return;
+                    }
+                    resolve(response || { ok: false, error: { errorMessage: "No response from background." } });
                 }
-                resolve(response || { ok: false, error: { errorMessage: "No response from background." } });
+            );
+        } catch (error) {
+            if (is_extension_context_invalidated_error(error)) {
+                stop_detection_timers();
             }
-        );
+            resolve({
+                ok: false,
+                error: {
+                    phase: "precheck",
+                    reasonCode: "runtime_message_error",
+                    errorMessage: error && error.message ? error.message : String(error),
+                },
+            });
+        }
     });
 }
 
@@ -943,31 +1021,39 @@ async function add_detect_moved_blocks_button() {
     }
 
     async function detect_moves() {
-        sync_background_supported_state();
-        if (!is_proper_page()) {
-            return;
-        }
-        let added = await add_detect_moved_blocks_button();
-        if (!added) {
-            return;
-        }
-        let detection_enabled = await get_detection_enabled_or_default();
-        if (!detection_enabled) {
-            auto_detection_done = false;
-            clear_previous_detection_markers();
-            update_background_state({
-                phase: "precheck",
-                status: "disabled_by_settings",
-                reasonCode: null,
-                errorMessage: null,
-                blockCount: 0,
-            });
-            set_detect_button_state("paused");
-            return;
-        }
-        if (!auto_detection_done) {
-            auto_detection_done = true;
-            run_detection();
+        try {
+            sync_background_supported_state();
+            if (!is_proper_page()) {
+                return;
+            }
+            let added = await add_detect_moved_blocks_button();
+            if (!added) {
+                return;
+            }
+            let detection_enabled = await get_detection_enabled_or_default();
+            if (!detection_enabled) {
+                auto_detection_done = false;
+                clear_previous_detection_markers();
+                update_background_state({
+                    phase: "precheck",
+                    status: "disabled_by_settings",
+                    reasonCode: null,
+                    errorMessage: null,
+                    blockCount: 0,
+                });
+                set_detect_button_state("paused");
+                return;
+            }
+            if (!auto_detection_done) {
+                auto_detection_done = true;
+                run_detection();
+            }
+        } catch (error) {
+            if (is_extension_context_invalidated_error(error)) {
+                stop_detection_timers();
+                return;
+            }
+            console.error("detect_moves failed", error);
         }
     }
 
