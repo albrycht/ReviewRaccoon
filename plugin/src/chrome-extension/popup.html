@@ -10,90 +10,88 @@
     <main class="popupCard">
       <header class="popupHeader">
         <div class="headerTitle">ReviewRaccoon</div>
-        <button id="settingsToggle" class="iconButton" title="Settings" aria-label="Toggle settings">⚙</button>
+        <label class="switch switchCompact" for="enableDetectionToggle" title="Enable detection">
+          <input id="enableDetectionToggle" type="checkbox" checked aria-label="Enable detection">
+          <span class="slider"></span>
+        </label>
       </header>
 
-      <section class="statusHeroSection" aria-live="polite">
-        <div class="statusHeroTop">
-          <span id="statusPill" class="statusPill statusIdle">Idle</span>
-          <span id="contextValue" class="contextValue">Checking current page...</span>
-        </div>
-        <div id="statusHeadline" class="statusHeadline">Preparing extension status</div>
-        <div id="statusHint" class="statusHint">Run detection now, or open a GitHub PR files page first.</div>
-      </section>
-
-      <section class="quickToggleSection">
-        <div class="settingsToggleRow">
-          <div class="settingsToggleText">
-            <label for="enableDetectionToggle" class="settingsLabel settingsLabelInline">Enable detection</label>
-            <p class="settingsHint settingsHintInline">Pause detection without changing other settings.</p>
+      <div id="enabledContent">
+        <section class="statusHeroSection" aria-live="polite">
+          <div class="statusHeroTop">
+            <span id="statusPill" class="statusPill statusIdle">Idle</span>
+            <span id="contextValue" class="contextValue">Checking current page...</span>
           </div>
-          <label class="switch" for="enableDetectionToggle">
-            <input id="enableDetectionToggle" type="checkbox" checked>
-            <span class="slider"></span>
-          </label>
-        </div>
-      </section>
+          <div id="statusHeadline" class="statusHeadline">Preparing extension status</div>
+          <div id="statusHint" class="statusHint">Run detection now, or open a GitHub PR files page first.</div>
+        </section>
 
-      <section class="summarySection" id="summarySection">
-        <div class="summaryRow">
-          <span class="summaryLabel">Found blocks</span>
-          <span id="blockCountValue" class="summaryValue">-</span>
-        </div>
-        <div class="summaryRow">
-          <span class="summaryLabel">Last updated</span>
-          <span id="updatedAtValue" class="summaryValue">-</span>
-        </div>
-      </section>
-
-      <section id="settingsSection" class="settingsSection hidden">
-        <label for="minLinesInput" class="settingsLabel">Min lines in block</label>
-        <input id="minLinesInput" class="settingsInput" type="number" step="1">
-        <p class="settingsHint">Use Enable detection toggle above to pause detection.</p>
-        <div class="settingsToggleRow">
-          <div class="settingsToggleText">
-            <label for="expandLargeDiffsToggle" class="settingsLabel settingsLabelInline">Expand all large diffs</label>
-            <p class="settingsHint settingsHintInline">If off, only files with detected moved blocks are expanded.</p>
+        <section class="summarySection" id="summarySection">
+          <div class="summaryRow">
+            <span class="summaryLabel">Found blocks</span>
+            <span id="blockCountValue" class="summaryValue">-</span>
           </div>
-          <label class="switch" for="expandLargeDiffsToggle">
-            <input id="expandLargeDiffsToggle" type="checkbox" checked>
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="settingsStateRow">
-          <span class="settingsStateLabel">Settings state</span>
-          <span id="settingsStateValue" class="settingsStateValue">Up to date</span>
-        </div>
-        <div class="settingsActions">
-          <button id="saveSettingsButton" class="secondaryButton">Save</button>
-          <button id="runNowButton" class="primaryButton">Run detection now</button>
-        </div>
-      </section>
+          <div class="summaryRow">
+            <span class="summaryLabel">Last updated</span>
+            <span id="updatedAtValue" class="summaryValue">-</span>
+          </div>
+        </section>
 
-      <section id="errorSection" class="errorSection hidden">
-        <div class="errorTitle">Needs attention</div>
-        <div id="errorReadableTitle" class="errorReadableTitle">Detection failed</div>
-        <div id="errorMessageValue" class="errorMessage">-</div>
-        <div class="errorActions">
-          <button id="retryButton" class="secondaryButton">Retry</button>
-          <button id="openPageButton" class="secondaryButton">Go to tab</button>
-          <button id="copyDiagButton" class="secondaryButton">Copy diagnostics</button>
-        </div>
-      </section>
+        <section id="errorSection" class="errorSection hidden">
+          <div class="errorTitle">Needs attention</div>
+          <div id="errorReadableTitle" class="errorReadableTitle">Detection failed</div>
+          <div id="errorMessageValue" class="errorMessage">-</div>
+          <div class="errorActions">
+            <button id="retryButton" class="secondaryButton">Retry</button>
+            <button id="openPageButton" class="secondaryButton">Go to tab</button>
+            <button id="copyDiagButton" class="secondaryButton">Copy diagnostics</button>
+          </div>
+        </section>
 
-      <details id="technicalDetails" class="technicalDetails">
-        <summary>Technical details</summary>
-        <div class="technicalGrid">
-          <div class="technicalLabel">Status</div>
-          <div id="statusValue" class="technicalValue">-</div>
-          <div class="technicalLabel">Phase</div>
-          <div id="phaseValue" class="technicalValue">-</div>
-          <div class="technicalLabel">Diff URL</div>
-          <div id="diffUrlValue" class="technicalValue">-</div>
-          <div class="technicalLabel">Reason code</div>
-          <div id="errorReasonValue" class="technicalValue">-</div>
-        </div>
-      </details>
+        <details id="technicalDetails" class="technicalDetails">
+          <summary>Technical details</summary>
+          <div class="technicalGrid">
+            <div class="technicalLabel">Status</div>
+            <div id="statusValue" class="technicalValue">-</div>
+            <div class="technicalLabel">Phase</div>
+            <div id="phaseValue" class="technicalValue">-</div>
+            <div class="technicalLabel">Diff URL</div>
+            <div id="diffUrlValue" class="technicalValue">-</div>
+            <div class="technicalLabel">Reason code</div>
+            <div id="errorReasonValue" class="technicalValue">-</div>
+          </div>
+        </details>
+
+        <details id="settingsDetails" class="technicalDetails">
+          <summary>Settings</summary>
+          <section id="settingsSection" class="settingsSection">
+            <label for="minLinesInput" class="settingsLabel">Min lines in block</label>
+            <input id="minLinesInput" class="settingsInput" type="number" step="1">
+            <div class="settingsToggleRow">
+              <div class="settingsToggleText">
+                <label for="expandLargeDiffsToggle" class="settingsLabel settingsLabelInline">Expand all large diffs</label>
+                <p class="settingsHint settingsHintInline">If off, only files with detected moved blocks are expanded.</p>
+              </div>
+              <label class="switch" for="expandLargeDiffsToggle">
+                <input id="expandLargeDiffsToggle" type="checkbox" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="settingsStateRow">
+              <span class="settingsStateLabel">Settings state</span>
+              <span id="settingsStateValue" class="settingsStateValue">Up to date</span>
+            </div>
+            <div class="settingsActions">
+              <button id="saveSettingsButton" class="secondaryButton">Save</button>
+              <button id="runNowButton" class="primaryButton">Run detection now</button>
+            </div>
+          </section>
+        </details>
+      </div>
+
+      <section id="disabledContent" class="sleepingState hidden" aria-live="polite">
+        <img class="sleepingStateImage" src="images/sleeping_raccoon_512.png" alt="Sleeping raccoon">
+      </section>
     </main>
   </body>
 </html>

@@ -193,6 +193,8 @@ function diagnostics_payload(state) {
 
 function render_state(state) {
   latestState = state;
+  let enabledContentEl = document.getElementById("enabledContent");
+  let disabledContentEl = document.getElementById("disabledContent");
   let statusEl = document.getElementById("statusValue");
   let blockCountEl = document.getElementById("blockCountValue");
   let phaseEl = document.getElementById("phaseValue");
@@ -230,6 +232,11 @@ function render_state(state) {
   statusPillEl.className = `statusPill ${get_status_pill_class(state.status)}`;
 
   let detection_enabled = is_detection_enabled_state(state);
+  if (enabledContentEl && disabledContentEl) {
+    enabledContentEl.classList.toggle("hidden", !detection_enabled);
+    disabledContentEl.classList.toggle("hidden", detection_enabled);
+  }
+
   runNowButtonEl.disabled = state.status === "running" || !detection_enabled;
   retryButtonEl.disabled = state.status === "running";
   openPageButtonEl.disabled = !Number.isFinite(activeTabId);
@@ -456,8 +463,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     popupPort = null;
   }
 
-  let settingsToggleEl = document.getElementById("settingsToggle");
-  let settingsSectionEl = document.getElementById("settingsSection");
   let saveSettingsButtonEl = document.getElementById("saveSettingsButton");
   let runNowButtonEl = document.getElementById("runNowButton");
   let retryButtonEl = document.getElementById("retryButton");
@@ -467,9 +472,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   let expandLargeDiffsToggleEl = document.getElementById("expandLargeDiffsToggle");
   let enableDetectionToggleEl = document.getElementById("enableDetectionToggle");
 
-  settingsToggleEl.addEventListener("click", () => {
-    settingsSectionEl.classList.toggle("hidden");
-  });
   saveSettingsButtonEl.addEventListener("click", save_settings);
   runNowButtonEl.addEventListener("click", run_detection_now);
   retryButtonEl.addEventListener("click", retry_detection);

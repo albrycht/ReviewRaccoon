@@ -85,10 +85,12 @@ There is no root build script (`package.json`) or standard CI config in repo roo
 
 - Popup UX is state-driven (`idle`, `running`, `success`, `no_blocks`, `error`, `disabled_by_settings`, `not_supported_page`) with phase/subPhase diagnostics from `background.js`.
 - Popup settings persist in `chrome.storage.local` via `background.js` and currently include:
-  - `detect-moved-blocks__enabled` (default `true`, exposed as always-visible popup toggle "Enable detection")
+  - `detect-moved-blocks__enabled` (default `true`, exposed as compact header toggle in popup)
   - `detect-moved-blocks__min-lines-count`
   - `detect-moved-blocks__expand-all-large-diffs` (default `true`, exposed as slider toggle in popup settings)
 - Popup "Technical details" includes the exact `.diff` URL used for the latest detection attempt (`diffUrl` in tab state), shown as a clickable link for debugging.
+- Popup "Settings" now lives in its own collapsed `details` block directly below "Technical details"; the old cog-triggered settings panel was removed.
+- When detection is disabled from the header toggle, popup body content is replaced by a sleeping raccoon image (`images/sleeping_raccoon_512.png`) while header title/toggle remain visible.
 - GitHub page control is now an icon-only ReviewRaccoon control in the right toolbar (`.pr-review-tools`), inserted as first item and styled as icon + badge.
 - In-page badge semantics mirror extension badge semantics:
   - paused/disabled: `⏸` (gray)
