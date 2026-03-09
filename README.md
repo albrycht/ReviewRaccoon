@@ -19,3 +19,34 @@ Before:
 
 After:
 ![Javascript code with ReviewRaccoon extension](examples/javascript_after.png/?raw=true "Javascript after")
+
+## Server Development
+
+Run all commands from the repository root.
+
+### Start development server
+
+```bash
+uv run gunicorn --chdir server main:app --reload --bind 127.0.0.1:8000
+```
+
+The API will be available at `http://127.0.0.1:8000` (for example, `POST /moved-blocks`).
+
+### Run tests
+
+```bash
+uv run --extra test python -m pytest server/tests
+```
+
+### Run Ruff (lint + format)
+
+```bash
+uv run --with ruff ruff check server
+uv run --with ruff ruff format server
+```
+
+### Run Ty (type checker)
+
+```bash
+uv run --with ty ty check server
+```
