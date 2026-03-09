@@ -50,3 +50,34 @@ uv run --with ruff ruff format server
 ```bash
 uv run --with ty ty check server
 ```
+
+## Extension E2E (Playwright)
+
+Run all commands from the repository root.
+
+### One-time setup
+
+```bash
+cd plugin/e2e
+npm install
+npm run install:browsers
+```
+
+### Run live GitHub + localhost backend E2E
+
+```bash
+# from plugin/e2e
+npm run test:agent
+```
+
+What this test does:
+- loads unpacked extension from `plugin/src/chrome-extension`,
+- opens live GitHub PR page `https://github.com/albrycht/ReviewRaccoon/pull/1/files`,
+- starts backend on `http://127.0.0.1:8000`,
+- runs Chromium in headless mode,
+- verifies toolbar icon appears and moved-block markers are rendered,
+- saves persistent artifacts for later analysis in `plugin/e2e/artifacts/<timestamp>/`:
+  - `after-detection.png`
+  - `after-detection.html`
+  - `metadata.json`
+- refreshes stable symlink `plugin/e2e/artifacts/latest` to the newest artifact directory.

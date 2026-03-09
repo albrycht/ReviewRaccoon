@@ -62,6 +62,9 @@ There is no root build script (`package.json`) or standard CI config in repo roo
    - content script logs for DOM/selectors,
    - service worker logs for diff fetch and backend POST.
 5. Validate backend behavior separately with API smoke checks and known diff fixtures.
+6. Run extension E2E regression (live GitHub + localhost backend):
+   - `cd plugin/e2e && npm run test:agent`
+   - this auto-starts backend via Playwright `webServer` and verifies toolbar icon + moved-block markers.
 
 ### Where contributors usually get blocked
 
@@ -186,6 +189,11 @@ Important defaults/heuristics:
 8. **Legacy provisioning assumptions**
    - Ansible installs old Python-era dependencies and may be fragile on newer distros.
 
+9. **Python `fuzzyset` import collision risk**
+   - Runtime detector expects repository module `server/fuzzyset.py` (supports `exact_match_only` argument).
+   - Environment dependency also installs external `fuzzyset` package with incompatible API.
+   - For Playwright E2E backend startup, use `PYTHONPATH=server` to force local module resolution.
+
 ---
 
 ## Suggested workflow for next sessions
@@ -195,3 +203,6 @@ Important defaults/heuristics:
 3. Validate detector output against one saved diff fixture.
 4. Align runtime and tests (contracts first, refactors later).
 5. Add a deterministic end-to-end regression fixture (`diff` in, expected blocks out).
+6. After each change in `server/` code, run static checks:
+   - `uv run --with ruff ruff check server`
+   - `uv run --with ty ty check server`
