@@ -19,7 +19,7 @@ class CustomJsonEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
-class MainPageResource(object):
+class MainPageResource:
     def on_get(self, req, resp):
         resp.content_type = "text/html"
         resp.body = dedent("""
@@ -37,7 +37,7 @@ class MainPageResource(object):
             """)
 
 
-class MovedBlocksResource(object):
+class MovedBlocksResource:
     def on_get(self, req, resp):
         resp.body = json.dumps({"message": "Hello world!"})
 

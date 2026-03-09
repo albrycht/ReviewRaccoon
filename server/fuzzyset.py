@@ -1,7 +1,7 @@
-import re
+import collections
 import math
 import operator
-import collections
+import re
 import unittest
 
 __version__ = (0, 0, 11)
@@ -11,7 +11,7 @@ _non_word_re = re.compile(r"[^\w, ]+")
 __all__ = ("FuzzySet",)
 
 
-class FuzzySet(object):
+class FuzzySet:
     def __init__(self, iterable=(), gram_size_lower=2, gram_size_upper=3):
         self.exact_set = {}
         self.match_dict = collections.defaultdict(list)
@@ -100,8 +100,8 @@ class FuzzySet(object):
 
 def _gram_counter(value, gram_size=2):
     result = collections.defaultdict(int)
-    for value in _iterate_grams(value, gram_size):
-        result[value] += 1
+    for gram in _iterate_grams(value, gram_size):
+        result[gram] += 1
     return result
 
 

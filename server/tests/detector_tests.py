@@ -62,7 +62,7 @@ class LineTest(unittest.TestCase):
         self.assertEqual(len(matching_block.lines), 2)
 
 
-class ChangedLines(object):
+class ChangedLines:
     def __init__(self, file, line_no_to_text):
         super()
         self.file = file

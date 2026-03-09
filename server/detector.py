@@ -2,7 +2,6 @@ import json
 import logging
 from collections import defaultdict
 from textwrap import dedent
-from typing import List, Dict
 
 from unidiff import PatchSet
 
@@ -75,7 +74,7 @@ def split_to_leading_whitespace_and_trim_text(text):
     return leading_whitespaces, trim_text
 
 
-class Line(object):
+class Line:
     def __init__(self, file, line_no, text):
         self.file = file
         self.line_no = int(line_no)
@@ -114,7 +113,7 @@ class Line(object):
         return json.dumps(self.to_dict())
 
 
-class MatchingLine(object):
+class MatchingLine:
     def __init__(self, removed_line, added_line, match_probability):
         self.added_line: Line = added_line
         self.removed_line: Line = removed_line
@@ -131,9 +130,9 @@ class MatchingLine(object):
         return json.dumps(self.to_dict())
 
 
-class MatchingBlock(object):
+class MatchingBlock:
     def __init__(self):
-        self.lines: List[MatchingLine] = []
+        self.lines: list[MatchingLine] = []
         self.first_removed_line = None
         self.first_added_line = None
         self.last_removed_line = None
@@ -286,7 +285,7 @@ class MatchingBlock(object):
         return json.dumps(self.to_dict())
 
 
-class MovedBlocksDetector(object):
+class MovedBlocksDetector:
     def __init__(self, removed_lines_dicts, added_lines_dicts):
         self.removed_lines = []
         self.trim_text_to_array_of_added_lines = defaultdict(list)
@@ -312,7 +311,7 @@ class MovedBlocksDetector(object):
 
     @measure_fun_time()
     def filter_out_block_inside_other_blocks(
-        self, filtered_blocks: List[MatchingBlock]
+        self, filtered_blocks: list[MatchingBlock]
     ):
         filtered_blocks.sort(key=lambda fb: fb.get_filter_sort_tuple_for_remove())
 
@@ -421,15 +420,15 @@ class MovedBlocksDetector(object):
 
     @measure_fun_time()
     def join_nearby_blocks(
-        self, matching_blocks: List[MatchingBlock], max_space_between=2
+        self, matching_blocks: list[MatchingBlock], max_space_between=2
     ):
         max_space_between += 1  # if we want to allow 2 lines between blocks difference between line numbers is 3
-        blocks_grouped_by_files: Dict[tuple, List[MatchingBlock]] = defaultdict(list)
+        blocks_grouped_by_files: dict[tuple, list[MatchingBlock]] = defaultdict(list)
         for block in matching_blocks:
             blocks_grouped_by_files[(block.file_removed, block.file_added)].append(
                 block
             )
-        blocks_after_merge: List[MatchingBlock] = []
+        blocks_after_merge: list[MatchingBlock] = []
 
         merged_blocks = 0
         for block_list in blocks_grouped_by_files.values():
@@ -503,7 +502,7 @@ class MovedBlocksDetector(object):
                     break
 
     def extend_matching_blocks_with_empty_removed_lines_if_possible(
-        self, currently_matching_blocks: List[MatchingBlock]
+        self, currently_matching_blocks: list[MatchingBlock]
     ):
         extended_blocks = []
         not_extended_blocks = []
@@ -521,8 +520,8 @@ class MovedBlocksDetector(object):
         return extended_blocks, not_extended_blocks
 
     @measure_fun_time()
-    def detect_moved_blocks(self, min_lines_count=None) -> List[MatchingBlock]:
-        detected_blocks: List[MatchingBlock] = []
+    def detect_moved_blocks(self, min_lines_count=None) -> list[MatchingBlock]:
+        detected_blocks: list[MatchingBlock] = []
         currently_matching_blocks = []
         new_matching_blocks = []
 

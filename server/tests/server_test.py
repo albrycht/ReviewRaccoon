@@ -2,18 +2,17 @@ from textwrap import dedent
 
 import requests
 from falcon import testing
+from tests.github_token import GITHUB_TOKEN
 from unidiff import PatchSet
-import json
 
 from detector import split_to_leading_whitespace_and_trim_text
 from main import create_api
 from tests.detector_tests import ChangedLines
-from tests.github_token import GITHUB_TOKEN
 
 
 class MyTestCase(testing.TestCase):
     def setUp(self):
-        super(MyTestCase, self).setUp()
+        super().setUp()
         self.app = create_api()
 
 
@@ -429,6 +428,6 @@ class TestMyApp(MyTestCase):
 
         for key in ["added_lines", "removed_lines"]:
             for from_js_line_dict, parsed_diff_line_dict in zip(
-                from_js[key], parsed_diff[key]
+                from_js[key], parsed_diff[key], strict=False
             ):
                 self.assertDictEqual(from_js_line_dict, parsed_diff_line_dict)
