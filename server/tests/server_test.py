@@ -1,13 +1,15 @@
+import os
 from textwrap import dedent
 
 import requests
 from falcon import testing
-from tests.github_token import GITHUB_TOKEN
 from unidiff import PatchSet
 
 from detector import split_to_leading_whitespace_and_trim_text
 from main import create_api
 from tests.detector_tests import ChangedLines
+
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 
 
 class MyTestCase(testing.TestCase):

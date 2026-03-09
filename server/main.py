@@ -1,6 +1,7 @@
 import json
 import logging
 from textwrap import dedent
+from typing import Any
 
 import falcon
 
@@ -13,10 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 class CustomJsonEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if hasattr(obj, "to_dict"):
-            return obj.to_dict()
-        return super().default(obj)
+    def default(self, o: Any) -> Any:
+        if hasattr(o, "to_dict"):
+            return o.to_dict()
+        return super().default(o)
 
 
 class MainPageResource:

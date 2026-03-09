@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 class MeasureTime:
     def __init__(self, stat_name):
         self._stat_name = stat_name
-        self._start_time = None
+        self._start_time: float | None = None
 
     def __enter__(self):
         self._start_time = time.time()
@@ -17,7 +17,10 @@ class MeasureTime:
     def __exit__(self, exc_type, _exc_val, _exc_tb):
         if exc_type is not None:  # exception was thrown
             return
-        duration = time.time() - self._start_time
+        start_time = self._start_time
+        if start_time is None:
+            return
+        duration = time.time() - start_time
         self.report(duration)
 
     def report(self, duration):

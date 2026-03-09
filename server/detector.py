@@ -114,9 +114,14 @@ class Line:
 
 
 class MatchingLine:
-    def __init__(self, removed_line, added_line, match_probability):
-        self.added_line: Line = added_line
-        self.removed_line: Line = removed_line
+    def __init__(
+        self,
+        removed_line: Line | None,
+        added_line: Line | None,
+        match_probability: float,
+    ):
+        self.added_line: Line | None = added_line
+        self.removed_line: Line | None = removed_line
         self.match_probability = match_probability
 
     def to_dict(self):
@@ -131,43 +136,35 @@ class MatchingLine:
 
 
 class MatchingBlock:
-    def __init__(self):
-        self.lines: list[MatchingLine] = []
-        self.first_removed_line = None
-        self.first_added_line = None
-        self.last_removed_line = None
-        self.last_added_line = None
-        self.not_empty_lines = 0
-        self.weighted_lines_count = 0
-        self.weighted_chars_count = 0
-        self.char_count = 0
-        self.match_density = 0
-        self.added_lines_numbers = set()
-        self.removed_lines_numbers = set()
+    def __init__(self, removed_line: Line, added_line: Line, match_probability=1):
+        self.lines: list[MatchingLine] = [
+            MatchingLine(removed_line, added_line, match_probability)
+        ]
+        self.first_removed_line: Line = removed_line
+        self.first_added_line: Line = added_line
+        self.last_removed_line: Line = removed_line
+        self.last_added_line: Line = added_line
+        self.not_empty_lines = 0 if removed_line.is_empty() else 1
+        self.weighted_lines_count = 0 if removed_line.is_empty() else match_probability
+        self.char_count = removed_line.trim_text_len + added_line.trim_text_len
+        self.weighted_chars_count = (
+            removed_line.trim_text_len + added_line.trim_text_len
+        ) * match_probability
+        self.match_density = self.weighted_chars_count / self.char_count
+        self.added_lines_numbers = {added_line.line_no}
+        self.removed_lines_numbers = {removed_line.line_no}
+        self.remove_part_is_inside_larger_block = False
 
     @classmethod
     def from_line(cls, removed_line, added_line, match_probability=1):
-        block = MatchingBlock()
-        block.lines = [MatchingLine(removed_line, added_line, match_probability)]
-        block.first_removed_line = removed_line
-        block.first_added_line = added_line
-        block.last_removed_line = removed_line
-        block.last_added_line = added_line
-        block.not_empty_lines = 0 if removed_line.is_empty() else 1
-        block.weighted_lines_count = 0 if removed_line.is_empty() else match_probability
-        block.char_count = removed_line.trim_text_len + added_line.trim_text_len
-        block.weighted_chars_count = (
-            removed_line.trim_text_len + added_line.trim_text_len
-        ) * match_probability
-        block.match_density = block.weighted_chars_count / block.char_count
-        block.added_lines_numbers.add(added_line.line_no)
-        block.removed_lines_numbers.add(removed_line.line_no)
-        return block
+        return cls(removed_line, added_line, match_probability)
 
     def try_extend_with_line(self, removed_line, added_line, match_probability=1):
         if self.last_removed_line.is_line_before(
             removed_line
-        ) and self.last_added_line.is_line_before(added_line):
+        ) and self.last_added_line.is_line_before(
+            added_line
+        ):
             self.lines.append(MatchingLine(removed_line, added_line, match_probability))
             self.last_removed_line = removed_line
             self.last_added_line = added_line
@@ -192,36 +189,33 @@ class MatchingBlock:
     def extend_with_empty_removed_line(self, next_removed_line):
         self.lines.append(MatchingLine(next_removed_line, None, 0))
         self.last_removed_line = next_removed_line
-        assert next_removed_line is not None
 
     def clear_empty_lines_at_end(self):
         last_index = None
+        # Keep legacy behavior: blocks with only one matching line are treated as empty here.
         for i in range(len(self.lines) - 1, 0, -1):
             matching_lines = self.lines[i]
-            if matching_lines.removed_line is None or matching_lines.added_line is None:
-                self.last_removed_line = None
-                self.last_added_line = None
-            else:
+            if (
+                matching_lines.removed_line is not None
+                and matching_lines.added_line is not None
+            ):
                 last_index = i
                 break
         if last_index is None:
             return None
         self.lines = self.lines[: last_index + 1]
-        # now we need to correct last_removed_line and last_added_line
-        for i in range(len(self.lines) - 1, 0, -1):
-            if self.last_added_line is not None and self.last_removed_line is not None:
+        last_removed_line = None
+        last_added_line = None
+        for matching_lines in reversed(self.lines):
+            if last_removed_line is None and matching_lines.removed_line is not None:
+                last_removed_line = matching_lines.removed_line
+            if last_added_line is None and matching_lines.added_line is not None:
+                last_added_line = matching_lines.added_line
+            if last_removed_line is not None and last_added_line is not None:
                 break
-
-            matching_lines = self.lines[i]
-            if (
-                matching_lines.removed_line is not None
-                and self.last_removed_line is None
-            ):
-                self.last_removed_line = matching_lines.removed_line
-
-            if matching_lines.added_line is not None and self.last_added_line is None:
-                self.last_added_line = matching_lines.added_line
-        assert self.last_removed_line is not None and self.last_added_line is not None
+        assert last_removed_line is not None and last_added_line is not None
+        self.last_removed_line = last_removed_line
+        self.last_added_line = last_added_line
         return self
 
     def line_count(self):
@@ -238,7 +232,7 @@ class MatchingBlock:
     def get_filter_sort_tuple_for_remove(self):
         return (
             self.last_removed_line.file,
-            self.lines[0].removed_line.line_no,
+            self.first_removed_line.line_no,
             -self.last_removed_line.line_no,
             -self.weighted_lines_count,
         )
@@ -246,7 +240,7 @@ class MatchingBlock:
     def get_filter_sort_tuple_for_add(self):
         return (
             self.last_removed_line.file,
-            self.lines[0].added_line.line_no,
+            self.first_added_line.line_no,
             -self.last_added_line.line_no,
             -self.weighted_lines_count,
         )
@@ -271,8 +265,8 @@ class MatchingBlock:
         return dedent(f"""Block(
         removed_file: {self.last_removed_line.file}
         added_file: {self.last_added_line.file}
-        removed_lines: {self.lines[0].removed_line.line_no}-{self.last_removed_line.line_no}
-        added_lines: {self.lines[0].added_line.line_no}-{self.last_added_line.line_no}
+        removed_lines: {self.first_removed_line.line_no}-{self.last_removed_line.line_no}
+        added_lines: {self.first_added_line.line_no}-{self.last_added_line.line_no}
         );\n""")
 
     def __repr__(self):
@@ -343,9 +337,7 @@ class MovedBlocksDetector:
         ok_blocks = []
         last_matching_block = None
         for matching_block in filtered_blocks:
-            if getattr(
-                matching_block, "remove_part_is_inside_larger_block", False
-            ):  # TODO getattr was used to act like in javascript - rewrite it without getattr
+            if matching_block.remove_part_is_inside_larger_block:
                 continue
             if last_matching_block is None:
                 last_matching_block = matching_block
@@ -389,18 +381,13 @@ class MovedBlocksDetector:
         return filtered_blocks
 
     def merge_blocks(self, block1, block2):
-        new_block = MatchingBlock()
-        new_block.lines.extend(block1.lines)
-        new_block.lines.extend(block2.lines)
+        new_block = MatchingBlock(block1.first_removed_line, block1.first_added_line)
+        new_block.lines = [*block1.lines, *block2.lines]
         # TODO what about lines between those 2 blocks?
-        new_block.first_added_line = block1.first_added_line or block2.first_added_line
-        new_block.first_removed_line = (
-            block1.first_removed_line or block2.first_removed_line
-        )
-        new_block.last_added_line = block2.last_added_line or block1.last_added_line
-        new_block.last_removed_line = (
-            block2.last_removed_line or block1.last_removed_line
-        )
+        new_block.first_added_line = block1.first_added_line
+        new_block.first_removed_line = block1.first_removed_line
+        new_block.last_added_line = block2.last_added_line
+        new_block.last_removed_line = block2.last_removed_line
         new_block.weighted_lines_count = (
             block1.weighted_lines_count + block2.weighted_lines_count
         )
