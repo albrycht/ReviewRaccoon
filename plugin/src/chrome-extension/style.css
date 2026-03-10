@@ -1,13 +1,34 @@
-.detectedMovedBlock {
-    height: 100%;
+.rr-marker {
     display: block;
     width: 10px;
+    cursor: pointer;
+}
+
+.rr-marker-classic {
+    height: 100%;
     float: right;
     position: relative;
     left: 10px;
-    cursor: pointer;
     margin-bottom: -300px;
     padding-bottom: 301px; /* 1 px more then negative margin makes many blocks not collapse into 1*/
+}
+
+.rr-line-node-new-view {
+    position: relative;
+}
+
+.rr-line-node-new-view > .rr-marker-new-view {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    left: auto;
+    width: 10px;
+    height: auto;
+    float: none;
+    margin: 0;
+    padding: 0;
+    z-index: 2;
 }
 
 .blob-code {

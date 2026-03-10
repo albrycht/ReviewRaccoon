@@ -5,7 +5,7 @@
   "description": "Playwright E2E tests for ReviewRaccoon Chrome extension",
   "scripts": {
     "test": "playwright test",
-    "test:debug": "PWDEBUG=1 playwright test --headed",
+    "test:debug": "PWDEBUG=1 PW_HEADLESS=0 playwright test --headed",
     "test:xvfb": "xvfb-run -a npm run test",
     "test:agent": "bash scripts/run-e2e.sh",
     "install:browsers": "playwright install chromium"

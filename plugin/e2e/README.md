@@ -22,13 +22,33 @@ npm install
 npm run install:browsers
 ```
 
+Create local GitHub auth config for signed-in tests:
+
+```bash
+cd plugin/e2e
+cp github-auth.local.json.example github-auth.local.json
+# edit github-auth.local.json and set:
+# - username
+# - password
+# - prUrl (must be /pull/<number>/files or /pull/<number>/changes)
+```
+
+The real `github-auth.local.json` is gitignored; only the `.example` file is committed.
+
 ## Run tests
 
-Local developer run:
+Local developer run (headless by default):
 
 ```bash
 cd plugin/e2e
 npm test
+```
+
+Headed debug run:
+
+```bash
+cd plugin/e2e
+PW_HEADLESS=0 npm test -- tests/live_github_extension.spec.js
 ```
 
 Linux headless/agent-friendly run:
@@ -58,11 +78,16 @@ npm run test:agent
   - `detect-moved-blocks__custom-server-enabled = true`
   - `detect-moved-blocks__custom-server-base-url = http://127.0.0.1:8000`
 - `scripts/run-e2e.sh` always runs Chromium headless (`PW_HEADLESS=1`).
-- After moved blocks are detected, the test stores persistent artifacts:
-  - screenshot: `after-detection.png`
-  - full DOM snapshot: `after-detection.html`
-  - metadata: `metadata.json`
+- The signed-in flow verifies:
+  - new Files experience detection
+  - switch back to classic experience detection
+  - classic unified/split checks when diff-settings controls are present
+- After moved blocks are detected, the test stores persistent artifacts per stage:
+  - `after-detection-new-experience.png` and `after-detection-new-experience.html`
+  - `after-detection-classic.png` and `after-detection-classic.html` (or `classic-unified` + `classic-split` files when available)
+  - metadata: `metadata.json` (records under `views.<stage>`)
   - default location: `plugin/e2e/artifacts/<timestamp>/`
   - stable symlink to newest run: `plugin/e2e/artifacts/latest`
   - override location with `RR_E2E_ARTIFACTS_DIR=/custom/path`
+- If `github-auth.local.json` is missing or invalid, the test fails fast with setup instructions.
 - The suite uses a live GitHub page and can fail if GitHub is unavailable or heavily rate-limited.

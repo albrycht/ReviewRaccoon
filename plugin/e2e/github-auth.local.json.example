@@ -1,0 +1,10 @@
+{
+  "_instructions": [
+    "Copy this file to github-auth.local.json in the same directory.",
+    "Replace username, password, and prUrl with real values.",
+    "The github-auth.local.json file is gitignored and required by signed-in E2E tests."
+  ],
+  "username": "your-email@example.com",
+  "password": "replace-with-real-password",
+  "prUrl": "https://github.com/owner/repo/pull/123/files"
+}

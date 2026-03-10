@@ -45,7 +45,7 @@ function to_error_message(error) {
 
 function is_supported_github_diff_page(url) {
   if (!url || typeof url !== "string") return false;
-  return /https:\/\/github\.com\/[^/]+\/[^/]+\/(pull\/\d+\/files|pull\/\d+\/commits?\/[A-Za-z0-9]+|commits?\/[A-Za-z0-9]+)/.test(
+  return /https:\/\/github\.com\/[^/]+\/[^/]+\/(pull\/\d+\/(?:files|changes)|pull\/\d+\/commits?\/[A-Za-z0-9]+|commits?\/[A-Za-z0-9]+)/.test(
     url
   );
 }

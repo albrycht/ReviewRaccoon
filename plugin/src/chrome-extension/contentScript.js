@@ -18,7 +18,9 @@ let filepath_to_container_new = {};
 
 function is_new_view() {
     return document.querySelector('[class*="DiffComparisonViewer-module__FileContainer"]') !== null ||
-        document.querySelector('button[class*="ReviewMenuButton-module__ReviewMenuButton"]') !== null;
+        document.querySelector('[class*="DiffFileHeader-module__Header"]') !== null ||
+        document.querySelector('button[class*="ReviewMenuButton-module__ReviewMenuButton"]') !== null ||
+        document.querySelector('[class*="FilesChangedFeedback-module__PreviewLabel"]') !== null;
 }
 
 let filepath_to_anchor = {};
@@ -46,6 +48,9 @@ const DIFF_SETTLE_POLL_INTERVAL_MS = 100;
 const DIFF_SETTLE_QUIET_PERIOD_MS = 600;
 const DIFF_SETTLE_TIMEOUT_MS = 20000;
 const EXTENSION_CONTEXT_INVALIDATED_FRAGMENT = "Extension context invalidated";
+const MARKER_CLASS_BASE = "rr-marker";
+const MARKER_CLASS_CLASSIC = "rr-marker-classic";
+const MARKER_CLASS_NEW_VIEW = "rr-marker-new-view";
 
 function is_extension_context_invalidated_error(error) {
     if (!error) {
@@ -105,18 +110,54 @@ function get_file_container_new_view(filepath) {
     // We can look for the filename in the header text or title attribute.
 
     // Strategy: Find all file headers, check their text for filepath.
-    const headers = document.querySelectorAll('[class*="DiffFileHeader"]');
+    const normalized_filepath = String(filepath || "").trim();
+    if (!normalized_filepath) {
+        return null;
+    }
+    const basename = normalized_filepath.split("/").pop();
+    const headers = document.querySelectorAll('[class*="DiffFileHeader"], [data-path], [data-file-path]');
     for (let header of headers) {
-        if (header.textContent.includes(filepath) || (header.getAttribute('data-path') === filepath)) { // Fallback if data-path exists
+        let header_text = (header.textContent || "").trim();
+        let data_path = header.getAttribute('data-path');
+        let data_file_path = header.getAttribute('data-file-path');
+        let matches_path =
+            header_text.includes(normalized_filepath) ||
+            (basename && header_text.includes(basename)) ||
+            data_path === normalized_filepath ||
+            data_file_path === normalized_filepath;
+        if (matches_path) { // Fallback if data-path exists
             let container = header.parentElement;
             // Traverse up to find the main container (DiffComparisonViewer...)
-            while (container && !container.className.includes('DiffComparisonViewer-module__FileContainer')) {
+            while (
+                container &&
+                !container.className.includes('DiffComparisonViewer-module__FileContainer') &&
+                container.querySelectorAll('.diff-line-row, .diff-line-number, [data-line-number], [data-line-number-original], [data-line-number-new]').length === 0
+            ) {
                 container = container.parentElement;
             }
             if (container) {
                 filepath_to_container_new[filepath] = container;
                 return container;
             }
+        }
+    }
+
+    // Additional fallback for new preview/classic hybrid rows that include data-path on parent wrappers.
+    let escaped_path = css_escape(normalized_filepath);
+    let direct_path_nodes = document.querySelectorAll(
+        `[data-path="${escaped_path}"], [data-file-path="${escaped_path}"], a[href$="${escaped_path}"]`
+    );
+    for (const node of direct_path_nodes) {
+        let container = node;
+        while (
+            container &&
+            container.querySelectorAll('.diff-line-row, .diff-line-number, [data-line-number], [data-line-number-original], [data-line-number-new]').length === 0
+        ) {
+            container = container.parentElement;
+        }
+        if (container) {
+            filepath_to_container_new[filepath] = container;
+            return container;
         }
     }
 
@@ -129,8 +170,83 @@ function get_line_node_new_view(line, is_removed) {
     let container = get_file_container_new_view(line.file);
     if (!container) return null;
 
+    let side = is_removed ? "left" : "right";
+    let direct_code_cell = container.querySelector(
+        `.diff-text-cell[data-diff-side="${side}"][data-line-number="${line.line_no}"]:not(.hunk)`
+    );
+    if (direct_code_cell) {
+        return direct_code_cell;
+    }
+    let direct_anchor_cell = container.querySelector(
+        `.diff-text-cell[data-line-anchor$="${is_removed ? "L" : "R"}${line.line_no}"]:not(.hunk)`
+    );
+    if (direct_anchor_cell) {
+        return direct_anchor_cell;
+    }
+
     // Find all rows in this container
-    let rows = container.querySelectorAll('.diff-line-row');
+    let rows = container.querySelectorAll('.diff-line-row, tr[data-diff-line-key], tr[class*="DiffLine"]');
+    if (!rows || rows.length === 0) {
+        return null;
+    }
+
+    function get_line_number_from_cell(cell) {
+        if (!cell) return null;
+        let attrs = [
+            "data-line-number",
+            "data-line-number-original",
+            "data-line-number-new",
+            "data-old-line-number",
+            "data-new-line-number"
+        ];
+        for (const attr of attrs) {
+            let value = cell.getAttribute(attr);
+            if (!value) continue;
+            let parsed = parseInt(value, 10);
+            if (!isNaN(parsed)) {
+                return parsed;
+            }
+        }
+        if (
+            !cell.classList ||
+            (
+                !cell.classList.contains("diff-line-number") &&
+                !cell.classList.contains("new-diff-line-number")
+            )
+        ) {
+            return null;
+        }
+        let parsed_from_text = parseInt((cell.textContent || "").trim(), 10);
+        return isNaN(parsed_from_text) ? null : parsed_from_text;
+    }
+
+    function get_row_code_cell(row, target_is_removed) {
+        if (row.querySelector(".diff-hunk-cell, .diff-text-cell.hunk")) {
+            return null;
+        }
+        let content_candidates = row.querySelectorAll(
+            '.diff-text-cell, .blob-code-inner, .diff-text-inner, td.blob-code, td[class*="blob-code"], [class*="DiffLineContent"], [class*="DiffLine-module__lineContent"]'
+        );
+        if (content_candidates.length === 1) {
+            return content_candidates[0];
+        }
+        if (content_candidates.length >= 2) {
+            return target_is_removed ? content_candidates[0] : content_candidates[content_candidates.length - 1];
+        }
+        let row_children = Array.from(row.children || []);
+        if (row_children.length >= 4) {
+            return target_is_removed ? row_children[1] || null : row_children[3] || null;
+        }
+        if (row_children.length === 3) {
+            return row_children[2] || null;
+        }
+        for (const child of row_children) {
+            if (child.classList && (child.classList.contains("diff-text-cell") || child.classList.contains("blob-code"))) {
+                return child;
+            }
+        }
+        return null;
+    }
 
     // We need to find the cell with the correct line number
     // "L" means removed (left side usually), "R" means added (right side usually)
@@ -149,8 +265,13 @@ function get_line_node_new_view(line, is_removed) {
 
     // Let's iterate rows and check cells.
     for (let row of rows) {
+        if (row.querySelector(".diff-hunk-cell, .diff-text-cell.hunk")) {
+            continue;
+        }
         // Get number cells
-        let num_cells = row.querySelectorAll('.diff-line-number');
+        let num_cells = row.querySelectorAll(
+            '.diff-line-number, [data-line-number], [data-line-number-original], [data-line-number-new], td[class*="lineNumber"]'
+        );
 
         // Split view logic assumption:
         // If is_removed (Left):
@@ -170,10 +291,21 @@ function get_line_node_new_view(line, is_removed) {
         // If not, we use textContent.
 
         for (let cell of num_cells) {
-            let num = parseInt(cell.textContent.trim());
-            if (isNaN(num)) continue;
+            let num = get_line_number_from_cell(cell);
+            if (num === null) continue;
 
             if (num === line.line_no) {
+                let has_original_attr = cell.getAttribute("data-line-number-original") !== null || cell.getAttribute("data-old-line-number") !== null;
+                let has_new_attr = cell.getAttribute("data-line-number-new") !== null || cell.getAttribute("data-new-line-number") !== null;
+                if (has_original_attr && is_removed) {
+                    let code_cell = get_row_code_cell(row, true);
+                    if (code_cell) return code_cell;
+                }
+                if (has_new_attr && !is_removed) {
+                    let code_cell = get_row_code_cell(row, false);
+                    if (code_cell) return code_cell;
+                }
+
                 // Check if this cell represents left or right.
                 // In split view, left is usually first child or earlier sibling?
                 // Or we can check the corresponding code cell.
@@ -209,6 +341,10 @@ function get_line_node_new_view(line, is_removed) {
                         }
                     }
                 }
+                let fallback_code_cell = get_row_code_cell(row, is_removed);
+                if (fallback_code_cell) {
+                    return fallback_code_cell;
+                }
             }
         }
     }
@@ -235,7 +371,7 @@ function get_line_node(line, is_removed) {
 }
 
 function clear_previous_detection_markers() {
-    let markers = document.querySelectorAll(".detectedMovedBlock");
+    let markers = document.querySelectorAll(`.${MARKER_CLASS_BASE}`);
     for (const marker of markers) {
         marker.remove();
     }
@@ -262,6 +398,11 @@ function clear_previous_detection_markers() {
             bordered_node.removeAttribute("data-rr-original-border-bottom");
         }
     }
+
+    let new_view_marker_nodes = document.querySelectorAll(".rr-line-node-new-view");
+    for (const marker_node of new_view_marker_nodes) {
+        marker_node.classList.remove("rr-line-node-new-view");
+    }
 }
 
 function markLine(line, line_in_block_index, detected_block_index, is_removed, is_first_line, is_last_line, replace_html_content, alt_msg) {
@@ -269,6 +410,7 @@ function markLine(line, line_in_block_index, detected_block_index, is_removed, i
     if (!line_node) {
         return false;
     }
+    let new_view = is_new_view();
     let id_prefix = `detected-block-${detected_block_index}-${line_in_block_index}`;
     let data_type = is_removed ? REMOVED : ADDED;
     let oposite_data_type = is_removed ? ADDED : REMOVED;
@@ -277,7 +419,9 @@ function markLine(line, line_in_block_index, detected_block_index, is_removed, i
     let line_content_elem = line_node.querySelector('.blob-code-inner.blob-code-marker');
     // Fallback for new view
     if (!line_content_elem && is_new_view()) {
-        line_content_elem = line_node.querySelector('.diff-text-inner') || line_node;
+        line_content_elem =
+            line_node.querySelector('.diff-text-inner, .blob-code-inner, [class*="DiffLine-module__lineContent"], [class*="DiffLineContent"]') ||
+            line_node;
         // In new view, sometimes the cell IS the container if no inner div? 
         // But usually there is a div or span inside.
         // Let's create one if needed or just use the cell.
@@ -295,7 +439,12 @@ function markLine(line, line_in_block_index, detected_block_index, is_removed, i
     const block_marker = document.createElement('a');
     block_marker.innerHTML = ' ';
     block_marker.id = `${id_prefix}-${data_type}`;
-    block_marker.className = "detectedMovedBlock";
+    block_marker.className = new_view
+        ? `${MARKER_CLASS_BASE} ${MARKER_CLASS_NEW_VIEW}`
+        : `${MARKER_CLASS_BASE} ${MARKER_CLASS_CLASSIC}`;
+    if (new_view) {
+        line_node.classList.add("rr-line-node-new-view");
+    }
     block_marker.style.backgroundColor = block_color;
     block_marker.title = alt_msg;
     block_marker.onclick = function () { document.querySelector(`#${id_prefix}-${oposite_data_type}`).scrollIntoView(true); window.scrollBy(0, -103) };
@@ -638,7 +787,13 @@ async function add_detect_moved_blocks_button() {
             if (!reviewButton) {
                 let buttons = document.querySelectorAll('button');
                 for (let btn of buttons) {
-                    if (btn.textContent.includes('Submit review') || btn.textContent.includes('Review changes')) {
+                    let text = (btn.textContent || "").trim();
+                    let has_preview_label = btn.querySelector('[class*="FilesChangedFeedback-module__PreviewLabel"]') !== null;
+                    if (
+                        text.includes('Submit review') ||
+                        text.includes('Review changes') ||
+                        has_preview_label
+                    ) {
                         reviewButton = btn;
                         break;
                     }
@@ -655,6 +810,9 @@ async function add_detect_moved_blocks_button() {
                 let stack = reviewButton.closest('div[class*="Stack"]');
                 if (stack) {
                     button_container = stack;
+                }
+                if (!button_container) {
+                    button_container = reviewButton.closest('div[class*="Header"], div[class*="Actions"], div');
                 }
             }
         } else {
@@ -821,7 +979,7 @@ async function add_detect_moved_blocks_button() {
 
     function is_proper_page() {
         let pathname = window.location.pathname;
-        return /\/pull\/\d+\/files(?:\/.*)?$|\/pull\/\d+\/commits?\/[A-Za-z0-9]+(?:\/.*)?$|\/commits?\/[A-Za-z0-9]+(?:\/.*)?$/.test(pathname);
+        return /\/pull\/\d+\/(?:files|changes)(?:\/.*)?$|\/pull\/\d+\/commits?\/[A-Za-z0-9]+(?:\/.*)?$|\/commits?\/[A-Za-z0-9]+(?:\/.*)?$/.test(pathname);
     }
 
     function reset_detection_context_for_navigation() {

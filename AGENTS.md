@@ -64,7 +64,7 @@ There is no root build script (`package.json`) or standard CI config in repo roo
 5. Validate backend behavior separately with API smoke checks and known diff fixtures.
 6. Run extension E2E regression (live GitHub + localhost backend):
    - `cd plugin/e2e && npm run test:agent`
-   - this auto-starts backend via Playwright `webServer` and verifies toolbar icon + moved-block markers.
+   - this auto-starts backend via Playwright `webServer`, logs in with `plugin/e2e/github-auth.local.json`, and verifies moved-block markers in signed-in new/classic Files experiences.
 
 ### Where contributors usually get blocked
 
@@ -110,8 +110,13 @@ There is no root build script (`package.json`) or standard CI config in repo roo
 - Toolbar icon rendering avoids GitHub page CSP issues by requesting a base64 data URL from `background.js` (`contentScriptQuery: "get_icon_data_url"`), instead of directly using `chrome-extension://...` in page DOM.
 - Supported GitHub diff page routes in `background.js` include:
   - `/pull/<number>/files`
+  - `/pull/<number>/changes` (signed-in new Files experience)
   - `/pull/<number>/commits/<sha>`
   - `/commit/<sha>` and `/commits/<sha>`
+- Playwright E2E flow is now signed-in and stateful:
+  - requires local gitignored auth config `plugin/e2e/github-auth.local.json` (template: `.example`)
+  - attempts `Try the new experience`, validates markers, switches back via `Preview` -> `Switch to the classic experience`, then validates classic markers
+  - updates `plugin/e2e/artifacts/latest` symlink on every run (including direct `npm test`)
 - Content-script navigation handling is SPA-aware: it watches History API (`pushState`/`replaceState`), `popstate`, `hashchange`, GitHub Turbo/PJAX events, and a short URL polling fallback. URL identity ignores hash fragments (`#diff-...`), so in-page diff anchor jumps do not reset detection state or trigger re-detection.
 - Content script now defensively handles Chrome `"Extension context invalidated"` runtime/storage errors (e.g. right after extension reload) by falling back to defaults and stopping polling timers instead of throwing uncaught promise errors.
 - Large diff expansion is now detection-aware in `contentScript.js`:
@@ -161,6 +166,7 @@ Important defaults/heuristics:
 
 1. **GitHub DOM volatility**
    - Toolbar and diff-line selectors are still brittle across GitHub UI versions (old/new views).
+   - Signed-in new Files preview uses different PRC classnames and menu structure (`Preview`, `Switch to the classic experience`) that can change without notice.
    - Changes in `.pr-review-tools` structure or diff row layout can silently break injection/marker placement.
 
 2. **Popup toggle is timing-sensitive**
