@@ -350,37 +350,60 @@ async function switchNewExperienceDiffView(page, view) {
     return;
   }
 
-  const diffSettingsButton = page
-    .getByRole("button", { name: /open diff view settings/i })
-    .first();
-  await expect(
-    diffSettingsButton,
-    "Could not find new-experience diff settings button."
-  ).toBeVisible({ timeout: 45_000 });
-  await diffSettingsButton.click();
+  let switchedViaUi = false;
+  try {
+    const diffSettingsButton = page
+      .getByRole("button", { name: /open diff view settings/i })
+      .first();
+    await expect(
+      diffSettingsButton,
+      "Could not find new-experience diff settings button."
+    ).toBeVisible({ timeout: 20_000 });
+    await diffSettingsButton.click();
 
-  let optionLocator = page.getByRole("menuitemradio", {
-    name: view === DIFF_VIEW_UNIFIED ? /unified/i : /split/i,
-  });
-  if (!(await optionLocator.first().isVisible().catch(() => false))) {
-    optionLocator = page.getByRole("menuitem", {
+    let optionLocator = page.getByRole("menuitemradio", {
       name: view === DIFF_VIEW_UNIFIED ? /unified/i : /split/i,
     });
-  }
-  if (!(await optionLocator.first().isVisible().catch(() => false))) {
-    optionLocator = page.getByRole("button", {
-      name: view === DIFF_VIEW_UNIFIED ? /unified/i : /split/i,
-    });
+    if (!(await optionLocator.first().isVisible().catch(() => false))) {
+      optionLocator = page.getByRole("menuitem", {
+        name: view === DIFF_VIEW_UNIFIED ? /unified/i : /split/i,
+      });
+    }
+    if (!(await optionLocator.first().isVisible().catch(() => false))) {
+      optionLocator = page.getByRole("button", {
+        name: view === DIFF_VIEW_UNIFIED ? /unified/i : /split/i,
+      });
+    }
+
+    const option = optionLocator.first();
+    await expect(
+      option,
+      `Could not find "${view}" option in new-experience diff settings menu.`
+    ).toBeVisible({ timeout: 10_000 });
+
+    await option.click();
+    await page.waitForLoadState("domcontentloaded");
+
+    await expect
+      .poll(async () => getNewExperienceDiffView(page), {
+        timeout: 15_000,
+        intervals: [1_000, 2_000, 3_000],
+        message: `New-experience diff view did not switch to "${view}" via toolbar menu.`,
+      })
+      .toBe(view);
+    switchedViaUi = true;
+  } catch (_error) {
+    switchedViaUi = false;
   }
 
-  const option = optionLocator.first();
-  await expect(
-    option,
-    `Could not find "${view}" option in new-experience diff settings menu.`
-  ).toBeVisible({ timeout: 20_000 });
+  if (switchedViaUi) {
+    return;
+  }
 
-  await option.click();
-  await page.waitForLoadState("domcontentloaded");
+  // Fallback: force desired diff mode via URL query when toolbar menu option is unavailable.
+  const targetUrl = new URL(page.url());
+  targetUrl.searchParams.set("diff", view);
+  await navigateWithRetry(page, targetUrl.toString(), 2);
 
   await expect
     .poll(async () => getNewExperienceDiffView(page), {

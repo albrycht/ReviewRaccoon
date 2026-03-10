@@ -403,6 +403,15 @@ function clear_previous_detection_markers() {
     for (const marker_node of new_view_marker_nodes) {
         marker_node.classList.remove("rr-line-node-new-view");
     }
+
+    let padded_nodes = document.querySelectorAll("[data-rr-original-padding-right]");
+    for (const padded_node of padded_nodes) {
+        let original_padding_right = padded_node.getAttribute("data-rr-original-padding-right");
+        if (original_padding_right !== null) {
+            padded_node.style.paddingRight = original_padding_right;
+            padded_node.removeAttribute("data-rr-original-padding-right");
+        }
+    }
 }
 
 function markLine(line, line_in_block_index, detected_block_index, is_removed, is_first_line, is_last_line, replace_html_content, alt_msg) {
@@ -443,6 +452,17 @@ function markLine(line, line_in_block_index, detected_block_index, is_removed, i
         ? `${MARKER_CLASS_BASE} ${MARKER_CLASS_NEW_VIEW}`
         : `${MARKER_CLASS_BASE} ${MARKER_CLASS_CLASSIC}`;
     if (new_view) {
+        let marker_index_for_line = line_node.querySelectorAll(`.${MARKER_CLASS_NEW_VIEW}`).length;
+        let marker_right_offset_px = marker_index_for_line * 11;
+        block_marker.style.setProperty("--rr-marker-right-offset", `${marker_right_offset_px}px`);
+        if (!line_node.hasAttribute("data-rr-original-padding-right")) {
+            line_node.setAttribute("data-rr-original-padding-right", line_node.style.paddingRight || "");
+        }
+        let current_padding_right = parseFloat(window.getComputedStyle(line_node).paddingRight || "0");
+        let required_padding_right = marker_right_offset_px + 14;
+        if (current_padding_right < required_padding_right) {
+            line_node.style.paddingRight = `${required_padding_right}px`;
+        }
         line_node.classList.add("rr-line-node-new-view");
     }
     block_marker.style.backgroundColor = block_color;
@@ -890,7 +910,7 @@ async function add_detect_moved_blocks_button() {
         let last_snapshot = null;
         while (Date.now() - started_at < timeout_ms) {
             let pending_loader_count = get_pending_diff_loader_count();
-            let load_button_count = document.querySelectorAll(".load-diff-button").length;
+            let load_button_count = get_load_diff_buttons().length;
             let snapshot = `${pending_loader_count}:${load_button_count}`;
             if (snapshot === last_snapshot) {
                 stable_for_ms += DIFF_SETTLE_POLL_INTERVAL_MS;
@@ -918,6 +938,50 @@ async function add_detect_moved_blocks_button() {
         return String(value).replace(/["\\]/g, "\\$&");
     }
 
+    function normalize_text_for_match(value) {
+        return String(value || "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .toLowerCase();
+    }
+
+    function is_load_diff_button(button) {
+        if (!button || button.tagName !== "BUTTON") {
+            return false;
+        }
+        if (button.classList.contains("load-diff-button")) {
+            return true;
+        }
+        let label_node = button.querySelector('[data-component="text"], .prc-Button-Label-FWkx3');
+        let label_text = normalize_text_for_match(label_node ? label_node.textContent : button.textContent);
+        if (label_text !== "load diff") {
+            return false;
+        }
+        let class_name = button.className || "";
+        let variant = button.getAttribute("data-variant") || "";
+        if (class_name.includes("prc-Button-ButtonBase") || variant === "invisible") {
+            return true;
+        }
+        return true;
+    }
+
+    function get_load_diff_buttons(root = document) {
+        if (!root || typeof root.querySelectorAll !== "function") {
+            return [];
+        }
+        let candidates = root.querySelectorAll(
+            "button.load-diff-button, button.prc-Button-ButtonBase-9n-Xk, button[data-variant='invisible']"
+        );
+        let buttons = new Set();
+        for (const candidate of candidates) {
+            let button = candidate.tagName === "BUTTON" ? candidate : candidate.closest("button");
+            if (is_load_diff_button(button)) {
+                buttons.add(button);
+            }
+        }
+        return Array.from(buttons);
+    }
+
     function get_filepaths_with_detected_blocks(detected_blocks) {
         let filepaths = new Set();
         for (const detected_block of detected_blocks || []) {
@@ -938,15 +1002,18 @@ async function add_detect_moved_blocks_button() {
         let buttons = new Set();
         for (const filepath of filepaths_with_blocks) {
             let escaped_filepath = css_escape(filepath);
-            let old_view_buttons = document.querySelectorAll(
-                `.file-header[data-path="${escaped_filepath}"] .load-diff-button, .file[data-path="${escaped_filepath}"] .load-diff-button`
+            let old_view_nodes = document.querySelectorAll(
+                `.file-header[data-path="${escaped_filepath}"], .file[data-path="${escaped_filepath}"]`
             );
-            for (const button of old_view_buttons) {
-                buttons.add(button);
+            for (const old_view_node of old_view_nodes) {
+                let old_view_buttons = get_load_diff_buttons(old_view_node);
+                for (const button of old_view_buttons) {
+                    buttons.add(button);
+                }
             }
             let new_view_container = get_file_container_new_view(filepath);
             if (new_view_container) {
-                let new_view_buttons = new_view_container.querySelectorAll(".load-diff-button");
+                let new_view_buttons = get_load_diff_buttons(new_view_container);
                 for (const button of new_view_buttons) {
                     buttons.add(button);
                 }
@@ -958,7 +1025,7 @@ async function add_detect_moved_blocks_button() {
     async function expand_large_diffs(detected_blocks, expand_all_large_diffs) {
         let load_diff_buttons = [];
         if (expand_all_large_diffs) {
-            load_diff_buttons = Array.from(document.querySelectorAll(".load-diff-button"));
+            load_diff_buttons = get_load_diff_buttons();
         } else {
             let filepaths_with_blocks = get_filepaths_with_detected_blocks(detected_blocks);
             if (filepaths_with_blocks.size === 0) {

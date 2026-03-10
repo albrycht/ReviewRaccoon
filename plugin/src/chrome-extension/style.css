@@ -21,7 +21,7 @@
     position: absolute;
     top: 0;
     bottom: 0;
-    right: 0;
+    right: var(--rr-marker-right-offset, 0px);
     left: auto;
     width: 10px;
     height: auto;
