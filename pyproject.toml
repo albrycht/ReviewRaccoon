@@ -20,7 +20,7 @@ dependencies = [
     "packaging==26.0",
     "python-levenshtein==0.21.1",
     "rapidfuzz==3.14.3",
-    "requests==2.32.5",
+    "requests==2.33.0",
     "unidiff==0.7.5",
     "urllib3==2.6.3",
 ]
