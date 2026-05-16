@@ -22,7 +22,7 @@ dependencies = [
     "rapidfuzz==3.14.3",
     "requests==2.32.5",
     "unidiff==0.7.5",
-    "urllib3==2.6.3",
+    "urllib3==2.7.0",
 ]
 
 [project.optional-dependencies]
