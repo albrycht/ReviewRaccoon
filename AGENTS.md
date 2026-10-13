@@ -56,6 +56,7 @@ Core end-to-end flow:
 There is no root build script (`package.json`) or standard CI config in repo root, so use direct/manual workflow:
 
 1. Load extension unpacked from `plugin/src/chrome-extension` in Chrome.
+   - Firefox: open `about:debugging#/runtime/this-firefox` -> "Load Temporary Add-on..." -> pick `plugin/src/chrome-extension/manifest.json` (removed on browser restart). Or `npx web-ext run --source-dir plugin/src/chrome-extension`. The manifest declares both `background.service_worker` (Chrome) and `background.scripts` (Firefox event page) plus a `browser_specific_settings.gecko.id`; keep both background keys.
 2. Open a known PR files page (example from `project.txt`: `https://github.com/albrycht/ReviewRaccoon/pull/1/files`).
 3. Verify extension UI injection and marker rendering.
 4. Use browser DevTools:
@@ -143,19 +144,20 @@ There is no root build script (`package.json`) or standard CI config in repo roo
 - **Prod issue**
   - Start from `ansible/setup-movedetector-server.yaml`, then nginx/supervisor/certbot includes and templates.
 
-### Algorithm checkpoints in `server/detector.py`
+### Algorithm checkpoints in `server/detector.py` and `server/alignment_detector.py`
 
 When triaging false positive/false negative behavior, inspect in this order:
 
 1. Diff parsing (`diff_to_added_and_removed_lines`)
-2. Candidate matching (`added_lines_fuzzy_set.get(...)`)
-3. Block growth (`try_extend_with_line`, empty-line extension)
-4. Block merge (`join_nearby_blocks`)
-5. Block filtering (`_filter_out_small_blocks`, nested block filtering)
+2. Detector mode routing (`resolve_detector_mode`, `MovedBlocksDetector.from_diff(...)`)
+3. If `legacy`: candidate matching (`added_lines_fuzzy_set.get(...)`) then block growth/merge/filtering
+4. If `alignment`: stream build/tokenization, Smith-Waterman candidate extraction, candidate-to-block conversion
+5. Non-overlap resolution and small-block filtering (`char_count >= 20`, `min_lines_count`)
 
 Important defaults/heuristics:
 
 - `min_lines_count` defaults to `2` when not provided.
+- Detector mode defaults to `legacy`; set env `REVIEWRACCOON_DETECTOR_MODE=alignment` or request `detector_mode: "alignment"` to run the new algorithm.
 - Low `min_match_score` is used for very short lines; higher threshold for normal lines.
 - Small blocks are filtered by both weighted line count and `char_count >= 20`.
 - Empty lines can be included around blocks but do not count as non-empty match lines.
@@ -182,8 +184,7 @@ Important defaults/heuristics:
    - `plugin/tests/block_move_detector.test.js` imports `../src/moved_block_detector`, which is absent.
 
 5. **Server tests partially stale**
-   - Some tests post `added_lines` and `removed_lines`, while runtime `main.py` expects `diff_text`.
-   - Several tests reflect older API/contracts.
+   - Runtime now accepts both `diff_text` and `added_lines`/`removed_lines`, but several tests still reflect older detector behavior and thresholds.
 
 6. **Missing private test dependency**
    - `server/tests/server_test.py` imports `tests.github_token.GITHUB_TOKEN`; file is not in repository.
