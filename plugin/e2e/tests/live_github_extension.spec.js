@@ -743,6 +743,34 @@ test("loads extension on GitHub and renders moved-block markers", async () => {
       "classic-split"
     );
     await savePostDetectionArtifacts(page, classicSplitMarkerCount, "classic-split");
+
+    // Pausing must put GitHub's original line nodes back (syntax-highlight spans
+    // included), and resuming must re-highlight without duplicating markers.
+    const highlightedLineCount = await page.evaluate(() => {
+      const lines = document.querySelectorAll("[data-rr-highlighted]");
+      lines.forEach((line) => line.setAttribute("data-e2e-was-highlighted", ""));
+      return lines.length;
+    });
+    expect(highlightedLineCount).toBeGreaterThan(0);
+    await serviceWorker.evaluate(() =>
+      chrome.storage.local.set({ "detect-moved-blocks__enabled": false })
+    );
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => ({
+            markers: document.querySelectorAll(".rr-marker").length,
+            highlighted: document.querySelectorAll("[data-rr-highlighted]").length,
+            inlineHighlights: document.querySelectorAll("[data-e2e-was-highlighted] span.x").length,
+            restoredSyntaxSpans: document.querySelectorAll('[data-e2e-was-highlighted] [class^="pl-"]').length > 0,
+          })),
+        { timeout: 15_000, message: "Pausing detection did not restore original GitHub line content." }
+      )
+      .toEqual({ markers: 0, highlighted: 0, inlineHighlights: 0, restoredSyntaxSpans: true });
+
+    const resumedMarkerCount = await runDetectionAndExpectMarkers(page, serviceWorker, "classic-split-resumed");
+    expect(resumedMarkerCount).toBe(classicSplitMarkerCount);
+    expect(await page.locator("[data-rr-highlighted]").count()).toBe(highlightedLineCount);
   } finally {
     await context.close();
     fs.rmSync(userDataDir, { recursive: true, force: true });

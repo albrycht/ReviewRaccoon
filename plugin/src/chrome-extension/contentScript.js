@@ -28,6 +28,8 @@ function is_new_view() {
 }
 
 let filepath_to_anchor = {};
+// Line content elements we rewrote -> their original GitHub child nodes, restored on re-run/pause.
+let original_line_content_nodes = new WeakMap();
 
 let timer = null;
 let url_watch_timer = null;
@@ -380,13 +382,14 @@ function clear_previous_detection_markers() {
         marker.remove();
     }
 
-    let content_nodes = document.querySelectorAll("[data-rr-original-html]");
+    let content_nodes = document.querySelectorAll("[data-rr-highlighted]");
     for (const content_node of content_nodes) {
-        let original_html = content_node.getAttribute("data-rr-original-html");
-        if (original_html !== null) {
-            content_node.innerHTML = original_html;
+        let original_nodes = original_line_content_nodes.get(content_node);
+        if (original_nodes) {
+            content_node.replaceChildren(...original_nodes);
+            original_line_content_nodes.delete(content_node);
         }
-        content_node.removeAttribute("data-rr-original-html");
+        content_node.removeAttribute("data-rr-highlighted");
     }
 
     let bordered_nodes = document.querySelectorAll("[data-rr-original-border-top], [data-rr-original-border-bottom]");
@@ -418,7 +421,7 @@ function clear_previous_detection_markers() {
     }
 }
 
-function markLine(line, line_in_block_index, detected_block_index, is_removed, is_first_line, is_last_line, replace_html_content, alt_msg) {
+function markLine(line, line_in_block_index, detected_block_index, is_removed, is_first_line, is_last_line, replacement_content, alt_msg) {
     let line_node = get_line_node(line, is_removed);
     if (!line_node) {
         return false;
@@ -444,10 +447,11 @@ function markLine(line, line_in_block_index, detected_block_index, is_removed, i
     if (!line_content_elem) {
         return false;
     }
-    if (!line_content_elem.hasAttribute("data-rr-original-html")) {
-        line_content_elem.setAttribute("data-rr-original-html", line_content_elem.innerHTML);
+    if (!original_line_content_nodes.has(line_content_elem)) {
+        original_line_content_nodes.set(line_content_elem, Array.from(line_content_elem.childNodes));
+        line_content_elem.setAttribute("data-rr-highlighted", "");
     }
-    line_content_elem.innerHTML = replace_html_content;
+    line_content_elem.replaceChildren(replacement_content);
 
     const block_marker = document.createElement('a');
     block_marker.textContent = ' ';
@@ -489,24 +493,21 @@ function markLine(line, line_in_block_index, detected_block_index, is_removed, i
     return true;
 }
 
-function escape_html_markup(text) {
-    return text
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#39;");
-}
 
 
-function get_diff_part_as_html(diff_op, text, diff_op_to_skip) {
+// Built as DOM nodes (not HTML strings): diff text is PR-author controlled.
+function append_diff_part(fragment, diff_op, text, diff_op_to_skip) {
     if (diff_op === diff_op_to_skip) {
-        return '';
+        return;
     }
     if (diff_op === 1 || diff_op === -1) {
-        return `<span class='x'>${escape_html_markup(text)}</span>`;
+        let span = document.createElement('span');
+        span.className = 'x';
+        span.textContent = text;
+        fragment.appendChild(span);
+        return;
     }
-    return escape_html_markup(text);
+    fragment.appendChild(document.createTextNode(text));
 }
 
 function highlightDetectedBlock(block_index, detected_block) {
@@ -526,13 +527,13 @@ function highlightDetectedBlock(block_index, detected_block) {
         let removed_text = removed_line ? removed_line.leading_whitespaces + removed_line.trim_text : '';
         let diff = dmp.diff_main(removed_text, added_text);
         dmp.diff_cleanupSemantic(diff);
-        let removed_line_html = '';
-        let added_line_html = '';
+        let removed_line_content = document.createDocumentFragment();
+        let added_line_content = document.createDocumentFragment();
         for (let i = 0; i < diff.length; i++) {
             let diff_part = diff[i];
             let [op, text] = diff_part;
-            removed_line_html += get_diff_part_as_html(op, text, 1);
-            added_line_html += get_diff_part_as_html(op, text, -1)
+            append_diff_part(removed_line_content, op, text, 1);
+            append_diff_part(added_line_content, op, text, -1);
         }
         let is_first_line = line_in_block_index === 0;
         let is_last_line = line_in_block_index === detected_block.lines.length - 1;
@@ -541,12 +542,12 @@ function highlightDetectedBlock(block_index, detected_block) {
             : 0;
         let alt_msg = `Moved block ${block_index + 1}. Approximate similarity ${average_match.toFixed(0)}%. Click marker to jump to matching location.`;
         if (removed_line) {
-            if (markLine(removed_line, line_in_block_index, block_index, true, is_first_line, is_last_line, removed_line_html, alt_msg)) {
+            if (markLine(removed_line, line_in_block_index, block_index, true, is_first_line, is_last_line, removed_line_content, alt_msg)) {
                 marked_lines_count += 1;
             }
         }
         if (added_line) {
-            if (markLine(added_line, line_in_block_index, block_index, false, is_first_line, is_last_line, added_line_html, alt_msg)) {
+            if (markLine(added_line, line_in_block_index, block_index, false, is_first_line, is_last_line, added_line_content, alt_msg)) {
                 marked_lines_count += 1;
             }
         }

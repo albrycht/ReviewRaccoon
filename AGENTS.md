@@ -132,6 +132,7 @@ There is no root build script (`package.json`) or standard CI config in repo roo
   - default behavior still expands all large diffs (`detect-moved-blocks__expand-all-large-diffs` defaults to `true` in local storage).
   - post-click waiting uses loader/DOM settle checks (quiet period + timeout), replacing fixed sleep.
 - Re-running detection now clears prior ReviewRaccoon markers/highlights first (and pause mode clears them as well), preventing duplicated in-page markers after pause/resume or repeated runs.
+- Inline highlights are built as DOM nodes (`append_diff_part` -> text nodes + `span.x`), never HTML strings: diff text is PR-author controlled, and AMO flags dynamic `innerHTML` assignments. Original GitHub line nodes are kept in the `original_line_content_nodes` WeakMap (elements tagged `data-rr-highlighted`) and put back with `replaceChildren` on re-run/pause. E2E covers this with a pause/resume step at the end.
 
 ### Debug entry points by symptom
 
