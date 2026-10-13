@@ -14,13 +14,7 @@
 		"https://patch-diff.githubusercontent.com/raw/*"
 	],
 	"background": {
-	  "service_worker": "background.js",
-	  "scripts": ["background.js"]
-	},
-	"browser_specific_settings": {
-	  "gecko": {
-		"id": "reviewraccoon@reviewraccoon.com"
-	  }
+	  "service_worker": "background.js"
 	},
 	"action": {
 	  "default_popup": "popup.html",

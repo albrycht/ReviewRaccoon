@@ -6,3 +6,4 @@ Racoon_icons.zip
 Racoon_icons
 __pycache__/
 *.egg-info/
+/plugin/dist/

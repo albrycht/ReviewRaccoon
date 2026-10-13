@@ -56,7 +56,9 @@ Core end-to-end flow:
 There is no root build script (`package.json`) or standard CI config in repo root, so use direct/manual workflow:
 
 1. Load extension unpacked from `plugin/src/chrome-extension` in Chrome.
-   - Firefox: open `about:debugging#/runtime/this-firefox` -> "Load Temporary Add-on..." -> pick `plugin/src/chrome-extension/manifest.json` (removed on browser restart). Or `npx web-ext run --source-dir plugin/src/chrome-extension`. The manifest declares both `background.service_worker` (Chrome) and `background.scripts` (Firefox event page) plus a `browser_specific_settings.gecko.id`; keep both background keys.
+   - The source manifest is Chrome-only (Chrome warns on `background.scripts` and unknown keys like `browser_specific_settings`).
+   - Firefox: run `bash plugin/scripts/package.sh`, then `about:debugging#/runtime/this-firefox` -> "Load Temporary Add-on..." -> pick `plugin/dist/firefox/manifest.json` (removed on browser restart). Or `npx web-ext run --source-dir plugin/dist/firefox`. The script swaps `background.service_worker` for `background.scripts` and adds `browser_specific_settings.gecko.id`.
+   - Store uploads: `bash plugin/scripts/package.sh` writes `plugin/dist/reviewraccoon-{chrome,firefox}-<version>.zip` (`plugin/dist/` is gitignored). Bump `version` in `manifest.json` first; stores reject non-increasing versions.
 2. Open a known PR files page (example from `project.txt`: `https://github.com/albrycht/ReviewRaccoon/pull/1/files`).
 3. Verify extension UI injection and marker rendering.
 4. Use browser DevTools:
