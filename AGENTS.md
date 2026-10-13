@@ -169,6 +169,7 @@ Important defaults/heuristics:
 1. **GitHub DOM volatility**
    - Toolbar and diff-line selectors are still brittle across GitHub UI versions (old/new views).
    - Signed-in new Files preview uses different PRC classnames and menu structure (`Preview`, `Switch to the classic experience`) that can change without notice.
+   - New-view CSS-module classnames changed (Oct 2026) from `<Module>-module__<Name>__<hash>` to `<Name>__<hash>` (e.g. `ReviewMenuButton__9e8CKv`, `PreviewLabel__44UECa`, `diff-file-header__CV6GPS`). This silently broke `is_new_view()` and toolbar-icon injection. Match only the stable `<Name>` part (see `NEW_VIEW_*_SELECTOR` constants in `contentScript.js`). Diff rows still use stable classes (`.diff-line-row`, `.diff-text-cell`, `data-line-number`).
    - Changes in `.pr-review-tools` structure or diff row layout can silently break injection/marker placement.
 
 2. **Popup toggle is timing-sensitive**

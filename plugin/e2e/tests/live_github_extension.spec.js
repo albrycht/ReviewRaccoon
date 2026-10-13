@@ -271,7 +271,7 @@ async function switchToNewExperienceIfAvailable(page) {
           return await page.evaluate(() => {
             const pathLooksNew = /\/pull\/\d+\/changes(?:\/.*)?$/.test(window.location.pathname);
             const hasPreviewBadge =
-              document.querySelector('[class*="FilesChangedFeedback-module__PreviewLabel"]') !== null;
+              document.querySelector('[class*="PreviewLabel"]') !== null;
             return pathLooksNew || hasPreviewBadge;
           });
         } catch (_error) {
@@ -290,7 +290,7 @@ async function switchToNewExperienceIfAvailable(page) {
 
 async function switchToClassicExperience(page) {
   const previewMenuButton = page
-    .locator('button:has([class*="FilesChangedFeedback-module__PreviewLabel"]):visible')
+    .locator('button:has([class*="PreviewLabel"]):visible')
     .first();
   await expect(
     previewMenuButton,

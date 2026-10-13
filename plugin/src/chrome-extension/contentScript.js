@@ -16,11 +16,15 @@ const ALL_COLORS = ['#058DC7', '#50B432', '#ED561B', '#DDDF00', '#24CBE5', '#64E
 // Cache for file containers in new view to avoid repeated DOM queries
 let filepath_to_container_new = {};
 
+const NEW_VIEW_REVIEW_BUTTON_SELECTOR = 'button[class*="ReviewMenuButton"]';
+const NEW_VIEW_PREVIEW_LABEL_SELECTOR = '[class*="PreviewLabel"]';
+const NEW_VIEW_FILE_HEADER_SELECTOR = '[class*="DiffFileHeader"], [class*="diff-file-header__"]';
+
 function is_new_view() {
-    return document.querySelector('[class*="DiffComparisonViewer-module__FileContainer"]') !== null ||
-        document.querySelector('[class*="DiffFileHeader-module__Header"]') !== null ||
-        document.querySelector('button[class*="ReviewMenuButton-module__ReviewMenuButton"]') !== null ||
-        document.querySelector('[class*="FilesChangedFeedback-module__PreviewLabel"]') !== null;
+    return document.querySelector('[class*="DiffComparisonViewer-module__FileContainer"], [class*="diffEntry__"]') !== null ||
+        document.querySelector(NEW_VIEW_FILE_HEADER_SELECTOR) !== null ||
+        document.querySelector(NEW_VIEW_REVIEW_BUTTON_SELECTOR) !== null ||
+        document.querySelector(NEW_VIEW_PREVIEW_LABEL_SELECTOR) !== null;
 }
 
 let filepath_to_anchor = {};
@@ -115,7 +119,7 @@ function get_file_container_new_view(filepath) {
         return null;
     }
     const basename = normalized_filepath.split("/").pop();
-    const headers = document.querySelectorAll('[class*="DiffFileHeader"], [data-path], [data-file-path]');
+    const headers = document.querySelectorAll(`${NEW_VIEW_FILE_HEADER_SELECTOR}, [data-path], [data-file-path]`);
     for (let header of headers) {
         let header_text = (header.textContent || "").trim();
         let data_path = header.getAttribute('data-path');
@@ -802,13 +806,13 @@ async function add_detect_moved_blocks_button() {
             // Inject into the new toolbar
             // Look for the "Review changes" / "Submit review" button container
             // Try class first
-            let reviewButton = document.querySelector('button[class*="ReviewMenuButton-module__ReviewMenuButton"]');
+            let reviewButton = document.querySelector(NEW_VIEW_REVIEW_BUTTON_SELECTOR);
             // Fallback based on text if class approach fails
             if (!reviewButton) {
                 let buttons = document.querySelectorAll('button');
                 for (let btn of buttons) {
                     let text = (btn.textContent || "").trim();
-                    let has_preview_label = btn.querySelector('[class*="FilesChangedFeedback-module__PreviewLabel"]') !== null;
+                    let has_preview_label = btn.querySelector(NEW_VIEW_PREVIEW_LABEL_SELECTOR) !== null;
                     if (
                         text.includes('Submit review') ||
                         text.includes('Review changes') ||
