@@ -185,8 +185,38 @@ function get_status_headline_and_hint(state) {
   };
 }
 
+// Mirrors normalize_custom_server_base_url() in background.js.
+function normalize_custom_server_base_url(value) {
+  let raw = typeof value === "string" ? value.trim() : "";
+  if (!raw) return DEFAULT_CUSTOM_SERVER_BASE_URL;
+  if (!/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(raw)) {
+    raw = `http://${raw}`;
+  }
+  try {
+    let parsed = new URL(raw);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return DEFAULT_CUSTOM_SERVER_BASE_URL;
+    }
+    return parsed.origin;
+  } catch (_ignored_error) {
+    return DEFAULT_CUSTOM_SERVER_BASE_URL;
+  }
+}
+
+// Must be called synchronously from a click handler (user gesture). Not awaited
+// before saving: Firefox may close the popup while the permission prompt is open.
+function request_custom_server_permission(base_url) {
+  let parsed = new URL(normalize_custom_server_base_url(base_url));
+  let origin = `${parsed.protocol}//${parsed.hostname}/*`;
+  return chrome.permissions
+    .request({ origins: [origin] })
+    .then((granted) => ({ granted: granted, origin: origin }))
+    .catch((error) => ({ granted: false, origin: origin, error: error }));
+}
+
 function get_readable_error_title(state) {
   if (!state || state.status !== "error") return "Detection failed";
+  if (state.reasonCode === "server_permission_missing") return "Server access not granted";
   if (state.phase === "diff_download") return "Couldn't download GitHub diff";
   if (state.phase === "server_request") return "Couldn't reach ReviewRaccoon server";
   if (state.phase === "server_response") return "ReviewRaccoon server returned invalid response";
@@ -344,6 +374,9 @@ async function save_settings() {
     ? customServerUrlInputEl.value
     : DEFAULT_CUSTOM_SERVER_BASE_URL;
   let detection_enabled = enableDetectionToggleEl ? enableDetectionToggleEl.checked : DEFAULT_DETECTION_ENABLED;
+  let permission_request = custom_server_enabled
+    ? request_custom_server_permission(custom_server_base_url)
+    : null;
 
   isSavingSettings = true;
   settingsState = "Saving...";
@@ -385,6 +418,20 @@ async function save_settings() {
     settingsState = "Save failed";
     await refresh_popup_state();
     return;
+  }
+
+  if (permission_request) {
+    let permission_result = await permission_request;
+    if (!permission_result.granted) {
+      popupLocalError = {
+        reasonCode: "server_permission_denied",
+        errorMessage: `Settings saved, but access to ${permission_result.origin} was not granted. Detection will fail until you click Save again and allow it.`,
+      };
+      settingsDirty = false;
+      settingsState = "Saved";
+      await refresh_popup_state();
+      return;
+    }
   }
 
   popupLocalError = null;

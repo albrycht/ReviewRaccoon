@@ -23,6 +23,19 @@ function getRunTimestamp() {
   return new Date().toISOString().replace(/[:.]/g, "-");
 }
 
+// Custom servers use optional_host_permissions granted from a popup prompt,
+// which Playwright cannot accept. Load a copy with the backend pre-granted.
+function prepareExtensionDir(backendBaseUrl) {
+  const extensionDir = fs.mkdtempSync(path.join(os.tmpdir(), "reviewraccoon-e2e-ext-"));
+  fs.cpSync(EXTENSION_PATH, extensionDir, { recursive: true });
+  const manifestPath = path.join(extensionDir, "manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const backendUrl = new URL(backendBaseUrl);
+  manifest.host_permissions.push(`${backendUrl.protocol}//${backendUrl.hostname}/*`);
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+  return extensionDir;
+}
+
 function resolveArtifactsDir() {
   const configuredDir = (process.env.RR_E2E_ARTIFACTS_DIR || "").trim();
   if (configuredDir) {
@@ -626,12 +639,13 @@ test("loads extension on GitHub and renders moved-block markers", async () => {
 
   const shouldRunHeadless = process.env.PW_HEADLESS !== "0";
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "reviewraccoon-e2e-"));
+  const extensionDir = prepareExtensionDir(LOCAL_BACKEND_BASE_URL);
   const context = await chromium.launchPersistentContext(userDataDir, {
     channel: "chromium",
     headless: shouldRunHeadless,
     args: [
-      `--disable-extensions-except=${EXTENSION_PATH}`,
-      `--load-extension=${EXTENSION_PATH}`,
+      `--disable-extensions-except=${extensionDir}`,
+      `--load-extension=${extensionDir}`,
     ],
   });
 
@@ -732,5 +746,6 @@ test("loads extension on GitHub and renders moved-block markers", async () => {
   } finally {
     await context.close();
     fs.rmSync(userDataDir, { recursive: true, force: true });
+    fs.rmSync(extensionDir, { recursive: true, force: true });
   }
 });

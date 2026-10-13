@@ -83,6 +83,8 @@ npm run test:agent
 - The test forces extension settings to use localhost backend:
   - `detect-moved-blocks__custom-server-enabled = true`
   - `detect-moved-blocks__custom-server-base-url = http://127.0.0.1:8000`
+- The extension is loaded from a temp copy whose manifest adds `http://127.0.0.1/*` to `host_permissions`
+  (custom servers normally need an optional-permission prompt that Playwright cannot accept).
 - `scripts/run-e2e.sh` always runs Chromium headless (`PW_HEADLESS=1`).
 - The signed-in flow verifies:
   - new Files experience detection

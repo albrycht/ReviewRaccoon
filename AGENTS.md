@@ -100,6 +100,7 @@ There is no root build script (`package.json`) or standard CI config in repo roo
 - Popup "Settings" now lives in its own collapsed `details` block directly below "Technical details"; the old cog-triggered settings panel was removed.
 - When detection is disabled from the header toggle, popup body content is replaced by a sleeping raccoon image (`images/sleeping_raccoon_512.png`) while header title/toggle remain visible.
 - Custom server URL normalization in `background.js` accepts formats like `localhost`, `http://localhost`, `localhost:8000`, trims trailing slashes, prepends `http://` when missing, and always sends detection requests to `<normalized-base>/moved-blocks`.
+- Custom server hosts are not in `host_permissions` (only `reviewraccoon.com` is). They come from `optional_host_permissions` (`http://*/*`, `https://*/*`): popup `save_settings` calls `chrome.permissions.request` for `<scheme>://<host>/*` while the custom server is enabled (fired synchronously from the click, not awaited before saving, because Firefox may close the popup on the prompt). `background.js` checks `chrome.permissions.contains` before the POST and fails with `server_permission_missing` if it isn't granted. The backend sends no CORS headers, so the host permission is required.
 - GitHub page control is now an icon-only ReviewRaccoon control in the right toolbar (`.pr-review-tools`), inserted as first item and styled as icon + badge.
 - In-page badge semantics mirror extension badge semantics:
   - paused/disabled: `⏸` (gray)
@@ -122,6 +123,7 @@ There is no root build script (`package.json`) or standard CI config in repo roo
   - `RR_E2E_PR_URL` overrides `prUrl` (PR #8 `https://github.com/albrycht/ReviewRaccoon/pull/8/files` is the reference case: exactly 1 moved block)
   - backend needs Python 3.10 (`UV_PYTHON=3.10`); `levenshtein==0.21.1` fails to build on 3.12/3.14
   - attempts `Try the new experience`, validates markers, switches back via `Preview` -> `Switch to the classic experience`, then validates classic markers
+  - loads a temp copy of the extension with `http://127.0.0.1/*` added to `host_permissions`, since Playwright cannot accept the popup permission prompt
   - updates `plugin/e2e/artifacts/latest` symlink on every run (including direct `npm test`)
 - Content-script navigation handling is SPA-aware: it watches History API (`pushState`/`replaceState`), `popstate`, `hashchange`, GitHub Turbo/PJAX events, and a short URL polling fallback. URL identity ignores hash fragments (`#diff-...`), so in-page diff anchor jumps do not reset detection state or trigger re-detection.
 - Content script now defensively handles Chrome `"Extension context invalidated"` runtime/storage errors (e.g. right after extension reload) by falling back to defaults and stopping polling timers instead of throwing uncaught promise errors.

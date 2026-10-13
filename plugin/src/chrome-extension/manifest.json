@@ -5,13 +5,13 @@
 	"permissions": ["storage"],
 	"host_permissions": [
 		"https://reviewraccoon.com/*",
-		"http://localhost/*",
-		"https://localhost/*",
-		"http://127.0.0.1/*",
-		"https://127.0.0.1/*",
 		"https://github.com/*/pull/*",
 		"https://github.com/*/commit/*",
 		"https://patch-diff.githubusercontent.com/raw/*"
+	],
+	"optional_host_permissions": [
+		"http://*/*",
+		"https://*/*"
 	],
 	"background": {
 	  "service_worker": "background.js"

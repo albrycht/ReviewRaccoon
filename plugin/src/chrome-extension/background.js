@@ -200,6 +200,13 @@ function resolve_moved_blocks_api_url(settings) {
   return `${base_url}/moved-blocks`;
 }
 
+// Custom servers live behind optional host permissions requested from the popup.
+// Match patterns ignore ports, so one grant covers every port on that host.
+function server_permission_origin(server_url) {
+  let parsed = new URL(server_url);
+  return `${parsed.protocol}//${parsed.hostname}/*`;
+}
+
 async function get_settings_snapshot() {
   let [min_lines_count, expand_all_large_diffs, detection_enabled, custom_server_enabled, custom_server_base_url] =
     await Promise.all([
@@ -535,6 +542,30 @@ async function handle_diff_text_request(request, sender, sendResponse) {
     );
     sendResponse({ ok: false, error: state });
     return;
+  }
+
+  if (settings.customServerEnabled) {
+    let permission_origin = server_permission_origin(server_api_url);
+    let has_permission = false;
+    try {
+      has_permission = await chrome.permissions.contains({ origins: [permission_origin] });
+    } catch (_ignored_error) {
+      has_permission = false;
+    }
+    if (!has_permission) {
+      let state = await update_tab_state(
+        tab_id,
+        make_error_state(
+          "server_request",
+          "server_permission",
+          "server_permission_missing",
+          `ReviewRaccoon is not allowed to access ${permission_origin}. Open Settings in the popup and click Save to grant access.`,
+          diff_url
+        )
+      );
+      sendResponse({ ok: false, error: state });
+      return;
+    }
   }
 
   let server_response;
