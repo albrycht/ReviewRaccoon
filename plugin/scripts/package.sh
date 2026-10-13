@@ -12,7 +12,8 @@ set -euo pipefail
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC_DIR="$PLUGIN_DIR/src/chrome-extension"
 DIST_DIR="$PLUGIN_DIR/dist"
-GECKO_ID="reviewraccoon@reviewraccoon.com"
+# Must match the existing AMO listing id.
+GECKO_ID="{8b168623-11e1-46ab-bef1-24a63adec8a4}"
 
 VERSION="$(jq -r .version "$SRC_DIR/manifest.json")"
 
