@@ -1,5 +1,7 @@
 import json
+import inspect
 import logging
+import os
 from collections import defaultdict
 from textwrap import dedent
 
@@ -9,6 +11,24 @@ from fuzzyset import FuzzySet
 from time_utils import measure_fun_time
 
 logger = logging.getLogger(__name__)
+DEFAULT_DETECTOR_MODE = "legacy"
+DETECTOR_MODE_ALIGNMENT = "alignment"
+DETECTOR_MODE_LEGACY = "legacy"
+DETECTOR_MODE_ENV_VAR = "REVIEWRACCOON_DETECTOR_MODE"
+
+
+def resolve_detector_mode(detector_mode=None):
+    env_mode = os.environ.get(DETECTOR_MODE_ENV_VAR, DEFAULT_DETECTOR_MODE)
+    mode = detector_mode or env_mode
+    mode = str(mode).strip().lower()
+    if mode not in {DETECTOR_MODE_LEGACY, DETECTOR_MODE_ALIGNMENT}:
+        logger.warning(
+            "Unknown detector mode '%s'. Falling back to '%s'.",
+            mode,
+            DEFAULT_DETECTOR_MODE,
+        )
+        return DEFAULT_DETECTOR_MODE
+    return mode
 
 
 def filepath(patched_file):
@@ -128,7 +148,7 @@ class MatchingLine:
         return {
             "added_line": self.added_line.to_dict() if self.added_line else None,
             "removed_line": self.removed_line.to_dict() if self.removed_line else None,
-            "match_probability": self.match_probability,
+            "match_probability": round(self.match_probability, 6),
         }
 
     def to_json(self):
@@ -286,6 +306,15 @@ class MovedBlocksDetector:
         self.added_file_name_to_line_no_to_line = defaultdict(dict)
         self.removed_file_name_to_line_no_to_line = defaultdict(dict)
         self.added_lines_fuzzy_set = FuzzySet()
+        fuzzy_supports_exact_match_only = False
+        try:
+            inspect.signature(self.added_lines_fuzzy_set.get)
+            fuzzy_supports_exact_match_only = (
+                "exact_match_only" in self.added_lines_fuzzy_set.get.__code__.co_varnames
+            )
+        except Exception:
+            pass
+        self._fuzzy_supports_exact_match_only = fuzzy_supports_exact_match_only
 
         for added_line_dict in added_lines_dicts:
             line = Line.from_dict(added_line_dict)
@@ -299,9 +328,22 @@ class MovedBlocksDetector:
             self.removed_file_name_to_line_no_to_line[line.file][line.line_no] = line
 
     @staticmethod
-    def from_diff(diff_text):
+    def from_changed_lines(removed_lines, added_lines, detector_mode=None):
+        mode = resolve_detector_mode(detector_mode)
+        if mode == DETECTOR_MODE_ALIGNMENT:
+            from alignment_detector import LocalAlignmentMovedBlocksDetector
+
+            return LocalAlignmentMovedBlocksDetector(removed_lines, added_lines)
+        return MovedBlocksDetector(removed_lines, added_lines)
+
+    @staticmethod
+    def from_diff(diff_text, detector_mode=None):
         parsed = diff_to_added_and_removed_lines(diff_text)
-        return MovedBlocksDetector(parsed["removed_lines"], parsed["added_lines"])
+        return MovedBlocksDetector.from_changed_lines(
+            parsed["removed_lines"],
+            parsed["added_lines"],
+            detector_mode=detector_mode,
+        )
 
     @measure_fun_time()
     def filter_out_block_inside_other_blocks(
@@ -515,12 +557,27 @@ class MovedBlocksDetector:
         for removed_line in self.removed_lines:
             if removed_line.trim_text:
                 min_match_score = 0.5 if len(removed_line.trim_text) > 2 else 0.35
-                fuzzy_matching_pairs = self.added_lines_fuzzy_set.get(
-                    removed_line.trim_text,
-                    default=None,
-                    exact_match_only=False,
-                    min_match_score=min_match_score,
-                )
+                if self._fuzzy_supports_exact_match_only:
+                    fuzzy_matching_pairs = self.added_lines_fuzzy_set.get(
+                        removed_line.trim_text,
+                        default=None,
+                        exact_match_only=False,
+                        min_match_score=min_match_score,
+                    )
+                else:
+                    fuzzy_matching_pairs = self.added_lines_fuzzy_set.get(
+                        removed_line.trim_text,
+                        default=None,
+                    )
+                    if fuzzy_matching_pairs:
+                        fuzzy_matching_pairs = [
+                            fuzz_pair
+                            for fuzz_pair in fuzzy_matching_pairs
+                            if isinstance(fuzz_pair, (list, tuple))
+                            and len(fuzz_pair) >= 2
+                            and isinstance(fuzz_pair[0], (float, int))
+                            and fuzz_pair[0] >= min_match_score
+                        ]
                 # iterate over currently_matching_blocks and try to extend them with empty lines
                 self.extend_matching_blocks_with_empty_added_lines_if_possible(
                     currently_matching_blocks

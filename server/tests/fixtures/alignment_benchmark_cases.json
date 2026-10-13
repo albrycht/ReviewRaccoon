@@ -1,0 +1,238 @@
+[
+  {
+    "name": "exact_move_same_file",
+    "min_lines_count": 2,
+    "expected_blocks": 1,
+    "removed": [
+      {"file": "a.py", "line_no": 1, "text": "alpha one"},
+      {"file": "a.py", "line_no": 2, "text": "beta two"},
+      {"file": "a.py", "line_no": 3, "text": "gamma three"}
+    ],
+    "added": [
+      {"file": "a.py", "line_no": 20, "text": "alpha one"},
+      {"file": "a.py", "line_no": 21, "text": "beta two"},
+      {"file": "a.py", "line_no": 22, "text": "gamma three"}
+    ]
+  },
+  {
+    "name": "exact_move_cross_file",
+    "min_lines_count": 2,
+    "expected_blocks": 1,
+    "removed": [
+      {"file": "left.py", "line_no": 5, "text": "prepare context"},
+      {"file": "left.py", "line_no": 6, "text": "execute action"},
+      {"file": "left.py", "line_no": 7, "text": "return result"}
+    ],
+    "added": [
+      {"file": "right.py", "line_no": 30, "text": "prepare context"},
+      {"file": "right.py", "line_no": 31, "text": "execute action"},
+      {"file": "right.py", "line_no": 32, "text": "return result"}
+    ]
+  },
+  {
+    "name": "small_suffix_modifications",
+    "min_lines_count": 2,
+    "expected_blocks": 1,
+    "removed": [
+      {"file": "removed.py", "line_no": 1, "text": "alpha beta gamma"},
+      {"file": "removed.py", "line_no": 2, "text": "delta epsilon zeta"},
+      {"file": "removed.py", "line_no": 3, "text": "eta theta iota"}
+    ],
+    "added": [
+      {"file": "added.py", "line_no": 10, "text": "alpha beta gamma!"},
+      {"file": "added.py", "line_no": 11, "text": "delta epsilon zeta!"},
+      {"file": "added.py", "line_no": 12, "text": "eta theta iota!"}
+    ]
+  },
+  {
+    "name": "indentation_only_changes",
+    "min_lines_count": 2,
+    "expected_blocks": 1,
+    "removed": [
+      {"file": "x.py", "line_no": 1, "text": "if ready:"},
+      {"file": "x.py", "line_no": 2, "text": "    do_work()"},
+      {"file": "x.py", "line_no": 3, "text": "    return ok"}
+    ],
+    "added": [
+      {"file": "y.py", "line_no": 40, "text": "if ready:"},
+      {"file": "y.py", "line_no": 41, "text": "        do_work()"},
+      {"file": "y.py", "line_no": 42, "text": "        return ok"}
+    ]
+  },
+  {
+    "name": "inserted_line_inside_block",
+    "min_lines_count": 2,
+    "expected_blocks": 1,
+    "removed": [
+      {"file": "x.py", "line_no": 1, "text": "open transaction"},
+      {"file": "x.py", "line_no": 2, "text": "update records"},
+      {"file": "x.py", "line_no": 3, "text": "close transaction"}
+    ],
+    "added": [
+      {"file": "y.py", "line_no": 10, "text": "open transaction"},
+      {"file": "y.py", "line_no": 11, "text": "write audit log"},
+      {"file": "y.py", "line_no": 12, "text": "update records"},
+      {"file": "y.py", "line_no": 13, "text": "close transaction"}
+    ]
+  },
+  {
+    "name": "deleted_line_inside_block",
+    "min_lines_count": 2,
+    "expected_blocks": 1,
+    "removed": [
+      {"file": "x.py", "line_no": 1, "text": "connect socket"},
+      {"file": "x.py", "line_no": 2, "text": "send headers"},
+      {"file": "x.py", "line_no": 3, "text": "send payload"},
+      {"file": "x.py", "line_no": 4, "text": "close socket"}
+    ],
+    "added": [
+      {"file": "y.py", "line_no": 30, "text": "connect socket"},
+      {"file": "y.py", "line_no": 31, "text": "send payload"},
+      {"file": "y.py", "line_no": 32, "text": "close socket"}
+    ]
+  },
+  {
+    "name": "one_line_to_two_lines_reflow",
+    "min_lines_count": 2,
+    "expected_blocks": 1,
+    "removed": [
+      {"file": "a.txt", "line_no": 1, "text": "alpha beta gamma delta epsilon zeta"},
+      {"file": "a.txt", "line_no": 2, "text": "tail marker"}
+    ],
+    "added": [
+      {"file": "b.txt", "line_no": 20, "text": "alpha beta gamma"},
+      {"file": "b.txt", "line_no": 21, "text": "delta epsilon zeta"},
+      {"file": "b.txt", "line_no": 22, "text": "tail marker"}
+    ]
+  },
+  {
+    "name": "two_lines_to_one_line_reflow",
+    "min_lines_count": 2,
+    "expected_blocks": 1,
+    "removed": [
+      {"file": "a.txt", "line_no": 1, "text": "merge left part"},
+      {"file": "a.txt", "line_no": 2, "text": "merge right part"},
+      {"file": "a.txt", "line_no": 3, "text": "anchor stable"}
+    ],
+    "added": [
+      {"file": "b.txt", "line_no": 40, "text": "merge left part merge right part"},
+      {"file": "b.txt", "line_no": 41, "text": "anchor stable"}
+    ]
+  },
+  {
+    "name": "punctuation_differences",
+    "min_lines_count": 2,
+    "expected_blocks": 1,
+    "removed": [
+      {"file": "l.js", "line_no": 1, "text": "if (ready) { doWork(); }"},
+      {"file": "l.js", "line_no": 2, "text": "return value;"}
+    ],
+    "added": [
+      {"file": "r.js", "line_no": 15, "text": "if(ready){doWork();}"},
+      {"file": "r.js", "line_no": 16, "text": "return value;"}
+    ]
+  },
+  {
+    "name": "whitespace_collapse",
+    "min_lines_count": 2,
+    "expected_blocks": 1,
+    "removed": [
+      {"file": "a.md", "line_no": 1, "text": "alpha   beta   gamma"},
+      {"file": "a.md", "line_no": 2, "text": "delta epsilon"}
+    ],
+    "added": [
+      {"file": "b.md", "line_no": 12, "text": "alpha beta gamma"},
+      {"file": "b.md", "line_no": 13, "text": "delta epsilon"}
+    ]
+  },
+  {
+    "name": "longer_block_with_minor_edits",
+    "min_lines_count": 2,
+    "expected_blocks": 1,
+    "removed": [
+      {"file": "old.py", "line_no": 1, "text": "step one read config"},
+      {"file": "old.py", "line_no": 2, "text": "step two validate input"},
+      {"file": "old.py", "line_no": 3, "text": "step three run pipeline"},
+      {"file": "old.py", "line_no": 4, "text": "step four collect output"},
+      {"file": "old.py", "line_no": 5, "text": "step five finalize"}
+    ],
+    "added": [
+      {"file": "new.py", "line_no": 21, "text": "step one read config"},
+      {"file": "new.py", "line_no": 22, "text": "step two validate inputs"},
+      {"file": "new.py", "line_no": 23, "text": "step three run pipeline"},
+      {"file": "new.py", "line_no": 24, "text": "step four collect output"},
+      {"file": "new.py", "line_no": 25, "text": "step five finalize!"}
+    ]
+  },
+  {
+    "name": "boilerplate_around_moved_block",
+    "min_lines_count": 2,
+    "expected_blocks": 1,
+    "removed": [
+      {"file": "k.py", "line_no": 10, "text": "def core_step_a():"},
+      {"file": "k.py", "line_no": 11, "text": "    return 1"},
+      {"file": "k.py", "line_no": 12, "text": "def core_step_b():"},
+      {"file": "k.py", "line_no": 13, "text": "    return 2"}
+    ],
+    "added": [
+      {"file": "m.py", "line_no": 1, "text": "try:"},
+      {"file": "m.py", "line_no": 2, "text": "    pass"},
+      {"file": "m.py", "line_no": 30, "text": "def core_step_a():"},
+      {"file": "m.py", "line_no": 31, "text": "    return 1"},
+      {"file": "m.py", "line_no": 32, "text": "def core_step_b():"},
+      {"file": "m.py", "line_no": 33, "text": "    return 2"}
+    ]
+  },
+  {
+    "name": "prefer_longer_candidate_when_overlap",
+    "min_lines_count": 2,
+    "expected_blocks": 1,
+    "removed": [
+      {"file": "src.py", "line_no": 1, "text": "one alpha"},
+      {"file": "src.py", "line_no": 2, "text": "two beta"},
+      {"file": "src.py", "line_no": 3, "text": "three gamma"},
+      {"file": "src.py", "line_no": 4, "text": "four delta"}
+    ],
+    "added": [
+      {"file": "dst_full.py", "line_no": 10, "text": "one alpha"},
+      {"file": "dst_full.py", "line_no": 11, "text": "two beta"},
+      {"file": "dst_full.py", "line_no": 12, "text": "three gamma"},
+      {"file": "dst_full.py", "line_no": 13, "text": "four delta"},
+      {"file": "dst_partial.py", "line_no": 20, "text": "one alpha"},
+      {"file": "dst_partial.py", "line_no": 21, "text": "two beta"},
+      {"file": "dst_partial.py", "line_no": 22, "text": "three gamma"}
+    ]
+  },
+  {
+    "name": "json_like_content_move",
+    "min_lines_count": 2,
+    "expected_blocks": 1,
+    "removed": [
+      {"file": "cfg_old.json", "line_no": 1, "text": "\"name\": \"ReviewRaccoon\","},
+      {"file": "cfg_old.json", "line_no": 2, "text": "\"enabled\": true,"},
+      {"file": "cfg_old.json", "line_no": 3, "text": "\"timeout\": 30"}
+    ],
+    "added": [
+      {"file": "cfg_new.json", "line_no": 11, "text": "\"name\": \"ReviewRaccoon\","},
+      {"file": "cfg_new.json", "line_no": 12, "text": "\"enabled\": true,"},
+      {"file": "cfg_new.json", "line_no": 13, "text": "\"timeout\": 30"}
+    ]
+  },
+  {
+    "name": "multiline_code_block_move",
+    "min_lines_count": 2,
+    "expected_blocks": 1,
+    "removed": [
+      {"file": "old.ts", "line_no": 100, "text": "function compute(a, b) {"},
+      {"file": "old.ts", "line_no": 101, "text": "  const sum = a + b"},
+      {"file": "old.ts", "line_no": 102, "text": "  return sum"},
+      {"file": "old.ts", "line_no": 103, "text": "}"}
+    ],
+    "added": [
+      {"file": "new.ts", "line_no": 200, "text": "function compute(a, b) {"},
+      {"file": "new.ts", "line_no": 201, "text": "  const sum = a + b"},
+      {"file": "new.ts", "line_no": 202, "text": "  return sum;"},
+      {"file": "new.ts", "line_no": 203, "text": "}"}
+    ]
+  }
+]

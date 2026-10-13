@@ -47,6 +47,26 @@ class TestMyApp(MyTestCase):
         self.assertEqual(len(result.json), 1)
         self.assertEqual(len(result.json[0]["lines"]), 3)
 
+    def test_post_message_with_diff_text_in_alignment_mode(self):
+        diff_text = dedent("""
+        --- file1       2019-05-29 19:23:25.228980900 +0200
+        +++ file2       2019-05-29 19:23:38.127013700 +0200
+        @@ -1,2 +1,3 @@
+        -alpha beta gamma delta epsilon zeta
+        -tail marker line
+        +alpha beta gamma
+        +delta epsilon zeta
+        +tail marker line
+        """)
+        post_data = {
+            "diff_text": diff_text,
+            "detector_mode": "alignment",
+        }
+
+        result = self.simulate_post("/moved-blocks", json=post_data)
+        self.assertEqual(len(result.json), 1)
+        self.assertGreaterEqual(len(result.json[0]["lines"]), 2)
+
     def test_post_message_with_added_and_removed_lines(self):
         removed_lines = ChangedLines(
             "file_with_removed_lines",

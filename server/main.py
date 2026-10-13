@@ -43,14 +43,38 @@ class MovedBlocksResource:
         resp.body = json.dumps({"message": "Hello world!"})
 
     def on_post(self, req, resp):
-        diff_text = req.media.get("diff_text")
-        pull_url = req.media.get("pull_request_url")
-        user_name = req.media.get("user_name")
-        min_lines_count = req.media.get("min_lines_count")
+        payload = req.media or {}
+        diff_text = payload.get("diff_text")
+        pull_url = payload.get("pull_request_url")
+        user_name = payload.get("user_name")
+        min_lines_count = payload.get("min_lines_count")
+        detector_mode = payload.get("detector_mode")
         logger.info(
-            f"Received request for PR: {pull_url} for user: {user_name} with min_lines_count: {min_lines_count}"
+            "Received request for PR: %s for user: %s with min_lines_count: %s (detector_mode=%s)",
+            pull_url,
+            user_name,
+            min_lines_count,
+            detector_mode,
         )
-        detector = MovedBlocksDetector.from_diff(diff_text)
+
+        if diff_text is not None:
+            detector = MovedBlocksDetector.from_diff(
+                diff_text, detector_mode=detector_mode
+            )
+        else:
+            removed_lines = payload.get("removed_lines")
+            added_lines = payload.get("added_lines")
+            if removed_lines is None or added_lines is None:
+                raise falcon.HTTPBadRequest(
+                    title="Invalid request body",
+                    description="Provide either diff_text or added_lines + removed_lines",
+                )
+            detector = MovedBlocksDetector.from_changed_lines(
+                removed_lines,
+                added_lines,
+                detector_mode=detector_mode,
+            )
+
         detected_blocks = detector.detect_moved_blocks(min_lines_count)
         resp.body = json.dumps(detected_blocks, cls=CustomJsonEncoder)
 
