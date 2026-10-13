@@ -31,7 +31,13 @@ cp github-auth.local.json.example github-auth.local.json
 # - username
 # - password
 # - prUrl (must be /pull/<number>/files or /pull/<number>/changes)
+# - totpSecret (authenticator-app setup key; GitHub requires 2FA)
 ```
+
+`RR_E2E_PR_URL=<url>` overrides `prUrl` for a single run.
+
+The backend needs Python 3.10 (`levenshtein==0.21.1` does not build on 3.12+);
+if uv picks a newer interpreter, run with `UV_PYTHON=3.10`.
 
 The real `github-auth.local.json` is gitignored; only the `.example` file is committed.
 

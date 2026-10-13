@@ -2,9 +2,11 @@
   "_instructions": [
     "Copy this file to github-auth.local.json in the same directory.",
     "Replace username, password, and prUrl with real values.",
+    "totpSecret is the authenticator-app setup key of the account (GitHub requires 2FA); the test generates login codes from it.",
     "The github-auth.local.json file is gitignored and required by signed-in E2E tests."
   ],
   "username": "your-email@example.com",
   "password": "replace-with-real-password",
-  "prUrl": "https://github.com/owner/repo/pull/123/files"
+  "prUrl": "https://github.com/owner/repo/pull/123/files",
+  "totpSecret": "BASE32SETUPKEY"
 }

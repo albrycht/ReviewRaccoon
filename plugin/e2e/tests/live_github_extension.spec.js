@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -67,7 +68,8 @@ function loadGithubAuthConfig() {
 
   const username = typeof parsedConfig.username === "string" ? parsedConfig.username.trim() : "";
   const password = typeof parsedConfig.password === "string" ? parsedConfig.password : "";
-  const prUrl = typeof parsedConfig.prUrl === "string" ? parsedConfig.prUrl.trim() : "";
+  const envPrUrl = (process.env.RR_E2E_PR_URL || "").trim();
+  const prUrl = envPrUrl || (typeof parsedConfig.prUrl === "string" ? parsedConfig.prUrl.trim() : "");
   if (!username || !password || !prUrl) {
     throw new Error(`${setupMessage}\nRequired keys: username, password, prUrl.`);
   }
@@ -77,7 +79,37 @@ function loadGithubAuthConfig() {
     );
   }
 
-  return { username, password, prUrl };
+  const totpSecret =
+    typeof parsedConfig.totpSecret === "string" ? parsedConfig.totpSecret.trim() : "";
+
+  return { username, password, prUrl, totpSecret };
+}
+
+function base32Decode(text) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits = "";
+  for (const char of text.replace(/[\s=]/g, "").toUpperCase()) {
+    const value = alphabet.indexOf(char);
+    if (value < 0) {
+      throw new Error(`Invalid base32 character in totpSecret: "${char}"`);
+    }
+    bits += value.toString(2).padStart(5, "0");
+  }
+  const bytes = [];
+  for (let i = 0; i + 8 <= bits.length; i += 8) {
+    bytes.push(parseInt(bits.slice(i, i + 8), 2));
+  }
+  return Buffer.from(bytes);
+}
+
+// RFC 6238 TOTP (SHA-1, 30s step, 6 digits), as used by GitHub authenticator-app 2FA.
+function generateTotp(secret, timestampMs = Date.now()) {
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(Math.floor(timestampMs / 30_000)));
+  const hmac = crypto.createHmac("sha1", base32Decode(secret)).update(counter).digest();
+  const offset = hmac[hmac.length - 1] & 0xf;
+  const code = (hmac.readUInt32BE(offset) & 0x7fffffff) % 1_000_000;
+  return String(code).padStart(6, "0");
 }
 
 async function savePostDetectionArtifacts(page, markerCount, view) {
@@ -247,8 +279,38 @@ async function signInToGitHub(page, authConfig) {
     );
   }
   if (page.url().includes("/sessions/two-factor")) {
+    if (!authConfig.totpSecret) {
+      throw new Error(
+        "GitHub account requires 2FA. Set totpSecret (authenticator app setup key) in github-auth.local.json."
+      );
+    }
+    const otpInput = page
+      .locator('input[autocomplete="one-time-code"]:visible, #app_totp:visible')
+      .first();
+    await expect(otpInput, "GitHub 2FA code input was not found.").toBeVisible({
+      timeout: 30_000,
+    });
+    // Avoid submitting a code that expires mid-request.
+    if (30_000 - (Date.now() % 30_000) < 3_000) {
+      await page.waitForTimeout(3_500);
+    }
+    await otpInput.fill(generateTotp(authConfig.totpSecret));
+    // GitHub auto-submits once 6 digits are entered; click Verify only if it did not.
+    await page.waitForTimeout(1_500);
+    const verifyButton = page.locator('button[type="submit"]:visible', { hasText: "Verify" }).first();
+    if (page.url().includes("/sessions/two-factor") && (await verifyButton.isVisible())) {
+      await verifyButton.click().catch(() => {});
+    }
+    await expect
+      .poll(() => page.url(), {
+        timeout: 30_000,
+        message: "GitHub 2FA verification did not complete.",
+      })
+      .not.toContain("/sessions/two-factor");
+  }
+  if (page.url().includes("/sessions/verified-device")) {
     throw new Error(
-      "GitHub account requires 2FA challenge; this E2E flow currently expects no interactive 2FA."
+      "GitHub requested emailed device verification; enable authenticator-app 2FA and set totpSecret."
     );
   }
 }

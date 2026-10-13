@@ -116,6 +116,9 @@ There is no root build script (`package.json`) or standard CI config in repo roo
   - `/commit/<sha>` and `/commits/<sha>`
 - Playwright E2E flow is now signed-in and stateful:
   - requires local gitignored auth config `plugin/e2e/github-auth.local.json` (template: `.example`)
+  - GitHub requires 2FA on the test account: `totpSecret` in that config lets the test generate TOTP codes; without it GitHub falls back to emailed device-verification codes, which block unattended runs
+  - `RR_E2E_PR_URL` overrides `prUrl` (PR #8 `https://github.com/albrycht/ReviewRaccoon/pull/8/files` is the reference case: exactly 1 moved block)
+  - backend needs Python 3.10 (`UV_PYTHON=3.10`); `levenshtein==0.21.1` fails to build on 3.12/3.14
   - attempts `Try the new experience`, validates markers, switches back via `Preview` -> `Switch to the classic experience`, then validates classic markers
   - updates `plugin/e2e/artifacts/latest` symlink on every run (including direct `npm test`)
 - Content-script navigation handling is SPA-aware: it watches History API (`pushState`/`replaceState`), `popstate`, `hashchange`, GitHub Turbo/PJAX events, and a short URL polling fallback. URL identity ignores hash fragments (`#diff-...`), so in-page diff anchor jumps do not reset detection state or trigger re-detection.
