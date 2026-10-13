@@ -450,7 +450,7 @@ function markLine(line, line_in_block_index, detected_block_index, is_removed, i
     line_content_elem.innerHTML = replace_html_content;
 
     const block_marker = document.createElement('a');
-    block_marker.innerHTML = ' ';
+    block_marker.textContent = ' ';
     block_marker.id = `${id_prefix}-${data_type}`;
     block_marker.className = new_view
         ? `${MARKER_CLASS_BASE} ${MARKER_CLASS_NEW_VIEW}`
@@ -490,7 +490,12 @@ function markLine(line, line_in_block_index, detected_block_index, is_removed, i
 }
 
 function escape_html_markup(text) {
-    return text.replace("<", "&lt;")
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
 }
 
 
@@ -547,13 +552,6 @@ function highlightDetectedBlock(block_index, detected_block) {
         }
     }
     return marked_lines_count;
-}
-
-function htmlToElement(html) {
-    let template = document.createElement('template');
-    html = html.trim(); // Never return a text node of whitespace as the result
-    template.innerHTML = html;
-    return template.content.firstChild;
 }
 
 function detect_moved_block_button_exists() {
