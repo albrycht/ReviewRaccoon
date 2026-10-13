@@ -747,22 +747,13 @@ function request_icon_data_url() {
     });
 }
 
-function get_user_name() {
-    let user_img_node = document.querySelector("header > div.Header-item > details > summary > img");
-    if (user_img_node) {
-        return user_img_node.alt;
-    }
-    return null;
-}
-
-function request_detected_blocks(page_url, user_name, min_lines_count) {
+function request_detected_blocks(page_url, min_lines_count) {
     return new Promise((resolve) => {
         try {
             chrome.runtime.sendMessage(
                 {
                     contentScriptQuery: "diff_text",
                     pull_request_url: page_url,
-                    user_name: user_name,
                     min_lines_count: min_lines_count,
                 },
                 (response) => {
@@ -1172,8 +1163,7 @@ async function add_detect_moved_blocks_button() {
             console.log(`Starting detection: min_lines_count=${min_lines_count}`);
             if (min_lines_count >= 0) {
                 let page_url = window.location.href;
-                let user_name = get_user_name();
-                let response = await request_detected_blocks(page_url, user_name, min_lines_count);
+                let response = await request_detected_blocks(page_url, min_lines_count);
                 if (!response || !response.ok) {
                     let reason_code = response && response.error ? response.error.reasonCode : null;
                     if (reason_code === "disabled_by_settings" || reason_code === "detection_paused") {

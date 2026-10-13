@@ -555,7 +555,6 @@ async function handle_diff_text_request(request, sender, sendResponse) {
       body: JSON.stringify({
         diff_text: diff_text,
         pull_request_url: page_url,
-        user_name: request.user_name,
         min_lines_count: min_lines_count,
       }),
     });
