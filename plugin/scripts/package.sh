@@ -3,7 +3,8 @@
 #
 # The source manifest is Chrome-only (no warnings when loaded unpacked).
 # The Firefox build adds background.scripts (Firefox has no MV3 service
-# workers) and browser_specific_settings.gecko.id.
+# workers) and browser_specific_settings.gecko (id + data_collection_permissions:
+# diff text is websiteContent, the PR URL is browsingActivity).
 #
 # Output: plugin/dist/{chrome,firefox}/ and plugin/dist/reviewraccoon-<browser>-<version>.zip
 set -euo pipefail
@@ -26,7 +27,10 @@ done
 
 jq --arg id "$GECKO_ID" \
 	'.background = {scripts: [.background.service_worker]}
-	| .browser_specific_settings = {gecko: {id: $id}}' \
+	| .browser_specific_settings = {gecko: {
+		id: $id,
+		data_collection_permissions: {required: ["websiteContent", "browsingActivity"]}
+	}}' \
 	"$SRC_DIR/manifest.json" > "$DIST_DIR/firefox/manifest.json"
 
 for browser in chrome firefox; do
